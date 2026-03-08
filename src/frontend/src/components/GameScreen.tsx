@@ -8,6 +8,8 @@ import { GameHUD } from "./GameHUD";
 import { GameOverScreen } from "./GameOverScreen";
 import { MobileControls } from "./MobileControls";
 
+const SWIPE_THRESHOLD = 30; // minimum px to register as a swipe
+
 interface GameScreenProps {
   onReturnToMenu: () => void;
 }
@@ -21,6 +23,7 @@ const DIR_TO_KEY: Record<"up" | "down" | "left" | "right", string> = {
 
 export function GameScreen({ onReturnToMenu }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // React state only for UI overlay
   const [score, setScore] = useState(0);
@@ -52,6 +55,40 @@ export function GameScreen({ onReturnToMenu }: GameScreenProps) {
     [handleKeyUp],
   );
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (!touchStartRef.current) return;
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - touchStartRef.current.x;
+      const deltaY = touch.clientY - touchStartRef.current.y;
+      touchStartRef.current = null;
+
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      // Only register if swipe distance exceeds threshold
+      if (absX < SWIPE_THRESHOLD && absY < SWIPE_THRESHOLD) return;
+
+      let key: string;
+      if (absX >= absY) {
+        key = deltaX > 0 ? "ArrowRight" : "ArrowLeft";
+      } else {
+        key = deltaY > 0 ? "ArrowDown" : "ArrowUp";
+      }
+
+      handleKeyDown(new KeyboardEvent("keydown", { key }));
+      setTimeout(() => {
+        handleKeyUp(new KeyboardEvent("keyup", { key }));
+      }, 50);
+    },
+    [handleKeyDown, handleKeyUp],
+  );
+
   useEffect(() => {
     // Start game
     startGame({
@@ -78,6 +115,8 @@ export function GameScreen({ onReturnToMenu }: GameScreenProps) {
 
   return (
     <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       style={{
         minHeight: "100vh",
         background: "linear-gradient(180deg, #0d1a06 0%, #1a2f0a 100%)",
@@ -136,11 +175,13 @@ export function GameScreen({ onReturnToMenu }: GameScreenProps) {
           )}
         </div>
 
-        {/* Mobile D-pad controls */}
-        <MobileControls
-          onDirection={handleMobileDirection}
-          onRelease={handleMobileRelease}
-        />
+        {/* Mobile D-pad controls — hidden on desktop pointer devices */}
+        <div className="mobile-only">
+          <MobileControls
+            onDirection={handleMobileDirection}
+            onRelease={handleMobileRelease}
+          />
+        </div>
 
         {/* Control hints bar */}
         <div

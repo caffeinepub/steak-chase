@@ -189,3 +189,14 @@ canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
+
+/* Mobile-only: hide on desktop pointer devices */
+.mobile-only {
+  display: block;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mobile-only {
+    display: none;
+  }
+}
