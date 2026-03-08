@@ -28,6 +28,7 @@ export interface RenderEnemy {
 export interface RenderState {
   maze: number[][];
   player: { col: number; row: number };
+  playerDirection: import("./constants").Direction;
   enemies: RenderEnemy[];
   powerUpActive: boolean;
   powerUpTimeLeft: number;
@@ -270,26 +271,103 @@ function drawSprite(
   }
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-  const src = "/assets/generated/wolf-player-transparent.dim_64x64.png";
-  const img = loadImage(src);
-  const pad = 1;
+// Draw a Minecraft-style pixel art wolf, top-down, facing direction, with mouth bite animation
+function drawPlayer(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  direction: import("./constants").Direction,
+  frameTime: number,
+): void {
+  const s = TILE_SIZE; // 28px tile
 
-  if (img.complete && img.naturalWidth > 0) {
-    ctx.drawImage(
-      img,
-      x + pad,
-      y + pad,
-      TILE_SIZE - pad * 2,
-      TILE_SIZE - pad * 2,
-    );
-  } else {
-    // Placeholder wolf shape
-    ctx.fillStyle = "#b0b0b0";
-    ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-    ctx.fillStyle = "#808080";
-    ctx.fillRect(x + 8, y + 2, TILE_SIZE - 16, 8);
+  // Bite animation: mouth opens and closes (0 = closed, 1 = fully open)
+  const bitePhase = Math.abs(Math.sin(frameTime * 0.008));
+
+  ctx.save();
+  // Translate to center of tile for rotation
+  ctx.translate(x + s / 2, y + s / 2);
+
+  // Rotate based on direction
+  const rotations: Record<import("./constants").Direction, number> = {
+    right: 0,
+    down: Math.PI / 2,
+    left: Math.PI,
+    up: -Math.PI / 2,
+    none: 0,
+  };
+  ctx.rotate(rotations[direction]);
+
+  // Draw wolf body centered at (0,0), facing right by default
+  const hw = s / 2; // half-width = 14
+
+  // -- Body: dark grey blocky torso --
+  ctx.fillStyle = "#3a3a3a";
+  ctx.fillRect(-hw + 3, -hw + 4, s - 6, s - 8);
+
+  // -- Lighter grey chest stripe --
+  ctx.fillStyle = "#7a7a7a";
+  ctx.fillRect(-hw + 5, -2, s - 16, 4);
+
+  // -- Darker back --
+  ctx.fillStyle = "#2a2a2a";
+  ctx.fillRect(-hw + 3, -hw + 4, s - 16, 5);
+
+  // -- Ears (two small squares at back-top) --
+  ctx.fillStyle = "#2a2a2a";
+  ctx.fillRect(-hw + 4, -hw + 4, 4, 4);
+  ctx.fillRect(-hw + 4, hw - 8, 4, 4);
+
+  // -- Ear tips (lighter inner) --
+  ctx.fillStyle = "#555555";
+  ctx.fillRect(-hw + 5, -hw + 5, 2, 2);
+  ctx.fillRect(-hw + 5, hw - 7, 2, 2);
+
+  // -- Eyes (yellow-orange, on back half of body) --
+  ctx.fillStyle = "#e8a020";
+  ctx.fillRect(-hw + 9, -hw + 7, 3, 3);
+  ctx.fillRect(-hw + 9, hw - 10, 3, 3);
+
+  // -- Eye pupils --
+  ctx.fillStyle = "#1a1000";
+  ctx.fillRect(-hw + 10, -hw + 8, 2, 2);
+  ctx.fillRect(-hw + 10, hw - 9, 2, 2);
+
+  // -- Snout / head extending right (front) --
+  ctx.fillStyle = "#4a4a4a";
+  // Upper jaw
+  const jawOpen = Math.floor(bitePhase * 5); // 0..5 pixels
+  ctx.fillRect(hw - 10, -3 - jawOpen, 9, 3 + jawOpen);
+  // Lower jaw
+  ctx.fillRect(hw - 10, jawOpen, 9, 3 + jawOpen);
+
+  // -- Nose tip --
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fillRect(hw - 2, -1, 2, 2);
+
+  // -- Teeth (white, visible when mouth open) --
+  if (bitePhase > 0.15) {
+    ctx.fillStyle = "#f0f0f0";
+    // Upper teeth
+    ctx.fillRect(hw - 9, -jawOpen, 2, 2);
+    ctx.fillRect(hw - 6, -jawOpen, 2, 2);
+    ctx.fillRect(hw - 3, -jawOpen, 2, 2);
+    // Lower teeth
+    ctx.fillRect(hw - 9, jawOpen - 2, 2, 2);
+    ctx.fillRect(hw - 6, jawOpen - 2, 2, 2);
+    ctx.fillRect(hw - 3, jawOpen - 2, 2, 2);
   }
+
+  // -- Tail (small nub at the back) --
+  ctx.fillStyle = "#5a5a5a";
+  ctx.fillRect(-hw - 2, -2, 4, 4);
+
+  // -- Outline / shadow for depth --
+  ctx.strokeStyle = "rgba(0,0,0,0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-hw + 3.5, -hw + 4.5, s - 7, s - 9);
+
+  ctx.restore();
 }
 
 export function renderFrame(
@@ -300,6 +378,7 @@ export function renderFrame(
   const {
     maze,
     player,
+    playerDirection,
     enemies,
     powerUpActive,
     powerUpTimeLeft,
@@ -373,5 +452,11 @@ export function renderFrame(
   }
 
   // Draw player
-  drawPlayer(ctx, player.col * TILE_SIZE, player.row * TILE_SIZE);
+  drawPlayer(
+    ctx,
+    player.col * TILE_SIZE,
+    player.row * TILE_SIZE,
+    playerDirection,
+    frameTime,
+  );
 }

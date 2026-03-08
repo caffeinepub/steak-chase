@@ -375,6 +375,7 @@ export function useGameEngine(
           {
             maze: state.maze,
             player: state.player,
+            playerDirection: state.currentDirection,
             enemies: renderEnemies,
             powerUpActive: state.powerUpActive,
             powerUpTimeLeft: state.powerUpActive
