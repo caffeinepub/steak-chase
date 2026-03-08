@@ -6,10 +6,18 @@ import {
 } from "../game/useGameEngine";
 import { GameHUD } from "./GameHUD";
 import { GameOverScreen } from "./GameOverScreen";
+import { MobileControls } from "./MobileControls";
 
 interface GameScreenProps {
   onReturnToMenu: () => void;
 }
+
+const DIR_TO_KEY: Record<"up" | "down" | "left" | "right", string> = {
+  up: "ArrowUp",
+  down: "ArrowDown",
+  left: "ArrowLeft",
+  right: "ArrowRight",
+};
 
 export function GameScreen({ onReturnToMenu }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,6 +37,20 @@ export function GameScreen({ onReturnToMenu }: GameScreenProps) {
     stopGame();
     onReturnToMenu();
   }, [stopGame, onReturnToMenu]);
+
+  const handleMobileDirection = useCallback(
+    (dir: "up" | "down" | "left" | "right") => {
+      handleKeyDown(new KeyboardEvent("keydown", { key: DIR_TO_KEY[dir] }));
+    },
+    [handleKeyDown],
+  );
+
+  const handleMobileRelease = useCallback(
+    (dir: "up" | "down" | "left" | "right") => {
+      handleKeyUp(new KeyboardEvent("keyup", { key: DIR_TO_KEY[dir] }));
+    },
+    [handleKeyUp],
+  );
 
   useEffect(() => {
     // Start game
@@ -114,6 +136,12 @@ export function GameScreen({ onReturnToMenu }: GameScreenProps) {
           )}
         </div>
 
+        {/* Mobile D-pad controls */}
+        <MobileControls
+          onDirection={handleMobileDirection}
+          onRelease={handleMobileRelease}
+        />
+
         {/* Control hints bar */}
         <div
           style={{
@@ -122,12 +150,12 @@ export function GameScreen({ onReturnToMenu }: GameScreenProps) {
             padding: "6px 12px",
             display: "flex",
             justifyContent: "center",
-            gap: "16px",
+            flexWrap: "wrap",
+            gap: "12px",
           }}
         >
           {[
-            { key: "W A S D", desc: "Move" },
-            { key: "↑ ↓ ← →", desc: "Move" },
+            { key: "WASD / ↑↓←→", desc: "Move" },
             { key: "🍎", desc: "Power-Up" },
             { key: "🥩", desc: "10pts" },
             { key: "🍖", desc: "30pts" },

@@ -103,27 +103,39 @@ function drawPath(ctx: CanvasRenderingContext2D, x: number, y: number): void {
 }
 
 function drawSteak(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-  const cx = x + TILE_SIZE / 2;
-  const cy = y + TILE_SIZE / 2;
-  const r = 4;
+  // Minecraft-style pixel art steak — 10x8 logical pixels at 2px each = 20x16 canvas px
+  // Centered in 28px tile: offset = (28-20)/2=4 horiz, (28-16)/2=6 vert
+  const p = 2;
+  const ox = x + 4;
+  const oy = y + 6;
 
-  // Meat shadow
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
-  ctx.beginPath();
-  ctx.ellipse(cx + 1, cy + 1, r, r * 0.75, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const B = "#3d1a00"; // dark crust border
+  const D = "#7a2800"; // dark meat
+  const M = "#b03818"; // mid meat
+  const R = "#c84820"; // red-brown meat surface
+  const L = "#d8603a"; // lighter highlight
+  const G = "#2a0e00"; // grill marks
 
-  // Meat body
-  ctx.fillStyle = COLOR.STEAK;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, r, r * 0.75, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // 10 cols × 8 rows of logical pixels
+  const steak: string[][] = [
+    [".", B, B, B, B, B, B, B, B, "."],
+    [B, D, D, D, D, D, D, D, D, B],
+    [B, D, L, R, G, R, L, R, D, B],
+    [B, D, R, L, R, G, R, L, D, B],
+    [B, D, M, R, L, R, G, M, D, B],
+    [B, D, G, M, R, L, R, G, D, B],
+    [B, D, D, D, D, D, D, D, D, B],
+    [".", B, B, B, B, B, B, B, B, "."],
+  ];
 
-  // Highlight
-  ctx.fillStyle = "rgba(255,120,80,0.6)";
-  ctx.beginPath();
-  ctx.ellipse(cx - 1, cy - 1, r * 0.5, r * 0.35, 0, 0, Math.PI * 2);
-  ctx.fill();
+  for (let row = 0; row < steak.length; row++) {
+    for (let col = 0; col < steak[row].length; col++) {
+      const color = steak[row][col];
+      if (color === ".") continue;
+      ctx.fillStyle = color;
+      ctx.fillRect(ox + col * p, oy + row * p, p, p);
+    }
+  }
 }
 
 function drawPorkChop(
@@ -131,32 +143,40 @@ function drawPorkChop(
   x: number,
   y: number,
 ): void {
-  const cx = x + TILE_SIZE / 2;
-  const cy = y + TILE_SIZE / 2;
+  // Minecraft-style pixel art pork chop — 12x8 logical pixels at 2px each = 24x16 canvas px
+  // Centered in 28px tile: offset = (28-24)/2=2 horiz, (28-16)/2=6 vert
+  const p = 2;
+  const ox = x + 2;
+  const oy = y + 6;
 
-  // Shadow
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
-  ctx.beginPath();
-  ctx.ellipse(cx + 1, cy + 1, 7, 5, 0.4, 0, Math.PI * 2);
-  ctx.fill();
+  const B = "#5a2010"; // dark border/crust
+  const P = "#e07050"; // cooked pink meat
+  const K = "#c05040"; // darker pink
+  const H = "#f09878"; // highlight pink
+  const F = "#f0e8c0"; // fat/marbling streak
+  const N = "#e8ddb0"; // bone (ivory)
+  const NB = "#b0a060"; // bone shadow
 
-  // Pork chop body (larger pinkish oval)
-  ctx.fillStyle = COLOR.PORK_CHOP;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, 7, 5, 0.4, 0, Math.PI * 2);
-  ctx.fill();
+  // 12 cols × 8 rows — meat body (cols 0-8) + bone nub (cols 9-11) on right middle rows
+  const chop: string[][] = [
+    [".", B, B, B, B, B, B, B, B, ".", ".", "."],
+    [B, P, P, P, P, P, P, P, B, NB, NB, "."],
+    [B, H, H, F, P, P, P, P, B, N, N, NB],
+    [B, H, P, F, F, P, K, P, B, N, N, NB],
+    [B, P, P, P, F, K, P, P, B, N, N, NB],
+    [B, P, K, P, P, P, P, P, B, NB, NB, "."],
+    [B, P, P, P, K, P, P, P, B, ".", ".", "."],
+    [".", B, B, B, B, B, B, B, ".", ".", ".", "."],
+  ];
 
-  // Fat white streak
-  ctx.fillStyle = "rgba(255,255,220,0.7)";
-  ctx.beginPath();
-  ctx.ellipse(cx - 1, cy - 1, 3, 2, 0.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Bone nub
-  ctx.fillStyle = "#f0e8d0";
-  ctx.beginPath();
-  ctx.ellipse(cx + 5, cy, 3, 2, 0.4, 0, Math.PI * 2);
-  ctx.fill();
+  for (let row = 0; row < chop.length; row++) {
+    for (let col = 0; col < chop[row].length; col++) {
+      const color = chop[row][col];
+      if (color === ".") continue;
+      ctx.fillStyle = color;
+      ctx.fillRect(ox + col * p, oy + row * p, p, p);
+    }
+  }
 }
 
 function drawGoldenApple(
