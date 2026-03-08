@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Outfit";
+  src: url("/assets/fonts/Outfit-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/fonts/JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.25rem;
+
+    /* Minecraft dark overworld palette */
+    --background: 0.16 0.015 120;
+    --foreground: 0.95 0.02 90;
+
+    --card: 0.2 0.01 100;
+    --card-foreground: 0.95 0.02 90;
+
+    --popover: 0.2 0.01 100;
+    --popover-foreground: 0.95 0.02 90;
+
+    /* Minecraft emerald green */
+    --primary: 0.52 0.18 145;
+    --primary-foreground: 0.97 0 0;
+
+    /* Stone gray secondary */
+    --secondary: 0.3 0.01 100;
+    --secondary-foreground: 0.9 0.02 90;
+
+    --muted: 0.25 0.01 100;
+    --muted-foreground: 0.6 0.02 90;
+
+    /* Gold accent */
+    --accent: 0.78 0.18 85;
+    --accent-foreground: 0.12 0.02 60;
+
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 0.97 0 0;
+
+    --border: 0.3 0.01 100;
+    --input: 0.28 0.01 100;
+    --ring: 0.52 0.18 145;
+
+    --chart-1: 0.78 0.18 85;
+    --chart-2: 0.52 0.18 145;
+    --chart-3: 0.55 0.22 25;
+    --chart-4: 0.6 0.15 200;
+    --chart-5: 0.65 0.18 300;
+
+    --sidebar: 0.18 0.01 100;
+    --sidebar-foreground: 0.95 0.02 90;
+    --sidebar-primary: 0.52 0.18 145;
+    --sidebar-primary-foreground: 0.97 0 0;
+    --sidebar-accent: 0.78 0.18 85;
+    --sidebar-accent-foreground: 0.12 0.02 60;
+    --sidebar-border: 0.3 0.01 100;
+    --sidebar-ring: 0.52 0.18 145;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Outfit", sans-serif;
+    image-rendering: pixelated;
+  }
+}
+
+/* Minecraft pixel font (loaded from Google Fonts via link tag in index.html or direct import) */
+/* We use JetBrains Mono as monospace fallback for pixel aesthetic */
+
+/* Pixelated rendering for game elements */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Minecraft-style button */
+.mc-button {
+  display: inline-block;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #5a8a2c;
+  border: none;
+  border-top: 3px solid #7eb84a;
+  border-left: 3px solid #7eb84a;
+  border-bottom: 3px solid #2d4e12;
+  border-right: 3px solid #2d4e12;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.05s;
+  image-rendering: pixelated;
+}
+
+.mc-button:hover {
+  background: #6aaa38;
+  filter: brightness(1.1);
+}
+
+.mc-button:active {
+  border-top: 3px solid #2d4e12;
+  border-left: 3px solid #2d4e12;
+  border-bottom: 3px solid #7eb84a;
+  border-right: 3px solid #7eb84a;
+  transform: translateY(1px);
+}
+
+.mc-button-gold {
+  background: #c8960c;
+  border-top: 3px solid #f0c030;
+  border-left: 3px solid #f0c030;
+  border-bottom: 3px solid #5a4000;
+  border-right: 3px solid #5a4000;
+}
+
+.mc-button-gold:hover {
+  background: #daa520;
+}
+
+/* Stone block panel */
+.mc-panel {
+  background: #3c3c3c;
+  border: 3px solid #555;
+  border-top-color: #7a7a7a;
+  border-left-color: #7a7a7a;
+  box-shadow: 3px 3px 0 #1a1a1a;
+}
+
+/* Inventory/chest panel */
+.mc-inventory {
+  background: #1d1d1d;
+  border: 3px solid #5a5a5a;
+  border-top-color: #8a8a8a;
+  border-left-color: #8a8a8a;
+  box-shadow: 4px 4px 0 #000;
+}
+
+/* Gold text glow */
+.gold-text {
+  color: #f0c030;
+  text-shadow: 2px 2px 0 #5a4000, 0 0 20px rgba(240, 192, 48, 0.4);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #5a5a5a;
+  border: 1px solid #7a7a7a;
+}
+
+/* Power-up flash animation */
+@keyframes powerup-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.powerup-active {
+  animation: powerup-flash 0.5s infinite;
+}
+
+/* Game canvas pixel rendering */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
