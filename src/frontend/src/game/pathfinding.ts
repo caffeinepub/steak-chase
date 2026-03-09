@@ -109,3 +109,57 @@ export function randomAdjacentStep(
   if (valid.length === 0) return null;
   return valid[Math.floor(Math.random() * valid.length)];
 }
+
+/**
+ * Skeleton straight-line movement:
+ * - Continues in currentDir if the next cell is open.
+ * - If blocked (wall or out of bounds), picks a random new open direction.
+ * Returns { next: Point, newDir: Point } or null if fully stuck.
+ */
+export function straightLineStep(
+  maze: number[][],
+  from: Point,
+  currentDir: Point,
+  rows: number,
+  cols: number,
+): { next: Point; newDir: Point } | null {
+  const allDirs: Point[] = [
+    { col: 0, row: -1 },
+    { col: 0, row: 1 },
+    { col: -1, row: 0 },
+    { col: 1, row: 0 },
+  ];
+
+  const canMove = (dir: Point): boolean => {
+    const nc = from.col + dir.col;
+    const nr = from.row + dir.row;
+    return (
+      nc >= 0 && nr >= 0 && nc < cols && nr < rows && maze[nr][nc] !== TILE.WALL
+    );
+  };
+
+  // Try current direction first
+  if (canMove(currentDir)) {
+    return {
+      next: { col: from.col + currentDir.col, row: from.row + currentDir.row },
+      newDir: currentDir,
+    };
+  }
+
+  // Blocked — pick a random new direction (excluding reverse if possible)
+  const reverse = { col: -currentDir.col, row: -currentDir.row };
+  const options = allDirs.filter((d) => {
+    if (d.col === reverse.col && d.row === reverse.row) return false;
+    return canMove(d);
+  });
+
+  // If no forward options, allow reverse
+  const choices = options.length > 0 ? options : allDirs.filter(canMove);
+
+  if (choices.length === 0) return null;
+  const chosen = choices[Math.floor(Math.random() * choices.length)];
+  return {
+    next: { col: from.col + chosen.col, row: from.row + chosen.row },
+    newDir: chosen,
+  };
+}

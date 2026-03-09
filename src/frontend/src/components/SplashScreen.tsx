@@ -2,15 +2,21 @@ import { Leaderboard } from "./Leaderboard";
 
 interface SplashScreenProps {
   onPlay: () => void;
+  muted: boolean;
+  onToggleMute: () => void;
 }
 
-export function SplashScreen({ onPlay }: SplashScreenProps) {
+export function SplashScreen({
+  onPlay,
+  muted,
+  onToggleMute,
+}: SplashScreenProps) {
   return (
     <div
       style={{
         minHeight: "100vh",
         background:
-          "linear-gradient(180deg, #0d1a06 0%, #1a2f0a 40%, #0d1a06 100%)",
+          "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(40,90,15,0.18) 0%, transparent 70%), radial-gradient(ellipse 60% 50% at 30% 80%, rgba(20,50,10,0.12) 0%, transparent 60%), #0a0c10",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -19,85 +25,119 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
         overflow: "hidden",
       }}
     >
-      {/* Grass/dirt decorative border at top */}
+      {/* Glowing top line instead of pixel border */}
       <div
         style={{
           position: "absolute",
           top: 0,
           left: 0,
           right: 0,
-          height: "8px",
+          height: "1px",
           background:
-            "repeating-linear-gradient(90deg, #5a7a2a 0px, #5a7a2a 28px, #3d6a18 28px, #3d6a18 56px)",
+            "linear-gradient(90deg, transparent 0%, rgba(90,180,40,0.5) 30%, rgba(120,200,50,0.7) 50%, rgba(90,180,40,0.5) 70%, transparent 100%)",
         }}
       />
 
-      {/* Decorative star particles */}
-      {[
-        { id: "s1", opacity: 0.3, left: "10%", top: "5%" },
-        { id: "s2", opacity: 0.4, left: "24%", top: "18%" },
-        { id: "s3", opacity: 0.5, left: "38%", top: "7%" },
-        { id: "s4", opacity: 0.3, left: "52%", top: "22%" },
-        { id: "s5", opacity: 0.6, left: "66%", top: "9%" },
-        { id: "s6", opacity: 0.4, left: "80%", top: "15%" },
-        { id: "s7", opacity: 0.3, left: "92%", top: "28%" },
-        { id: "s8", opacity: 0.5, left: "5%", top: "40%" },
-        { id: "s9", opacity: 0.4, left: "17%", top: "55%" },
-        { id: "s10", opacity: 0.3, left: "31%", top: "48%" },
-        { id: "s11", opacity: 0.6, left: "45%", top: "62%" },
-        { id: "s12", opacity: 0.4, left: "59%", top: "35%" },
-        { id: "s13", opacity: 0.3, left: "73%", top: "70%" },
-        { id: "s14", opacity: 0.5, left: "87%", top: "42%" },
-        { id: "s15", opacity: 0.4, left: "95%", top: "58%" },
-        { id: "s16", opacity: 0.3, left: "12%", top: "72%" },
-        { id: "s17", opacity: 0.5, left: "26%", top: "78%" },
-        { id: "s18", opacity: 0.4, left: "40%", top: "65%" },
-        { id: "s19", opacity: 0.3, left: "54%", top: "80%" },
-        { id: "s20", opacity: 0.6, left: "68%", top: "88%" },
-      ].map(({ id, opacity, left, top }) => (
-        <div
-          key={id}
-          style={{
-            position: "absolute",
-            width: "2px",
-            height: "2px",
-            background: "#f0c030",
-            opacity,
-            left,
-            top,
-            borderRadius: "0",
-          }}
-        />
-      ))}
+      {/* Soft atmospheric radial glows — replace pixel stars */}
+      <div
+        className="atmosphere-glow"
+        style={{
+          position: "absolute",
+          top: "-10%",
+          left: "20%",
+          width: "420px",
+          height: "420px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(80,160,30,1) 0%, transparent 70%)",
+          opacity: 0.05,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "30%",
+          right: "-5%",
+          width: "360px",
+          height: "360px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(240,180,20,1) 0%, transparent 70%)",
+          opacity: 0.04,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "10%",
+          left: "5%",
+          width: "400px",
+          height: "400px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(60,120,20,1) 0%, transparent 70%)",
+          opacity: 0.06,
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Mute button — top right */}
+      <button
+        type="button"
+        data-ocid="splash.mute_toggle"
+        onClick={onToggleMute}
+        title={muted ? "Unmute sounds" : "Mute sounds"}
+        style={{
+          position: "absolute",
+          top: "16px",
+          right: "16px",
+          background: muted ? "rgba(255,255,255,0.05)" : "rgba(90,160,40,0.12)",
+          border: muted
+            ? "1px solid rgba(255,255,255,0.1)"
+            : "1px solid rgba(100,180,50,0.3)",
+          borderRadius: "8px",
+          cursor: "pointer",
+          padding: "6px 10px",
+          fontSize: "1.1rem",
+          lineHeight: 1,
+          color: muted ? "#555" : "#aae060",
+          transition: "background 0.2s, border-color 0.2s, color 0.2s",
+          zIndex: 10,
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        {muted ? "🔇" : "🔊"}
+      </button>
 
       {/* Title Image */}
       <div
-        style={{ marginTop: "16px", marginBottom: "20px", textAlign: "center" }}
+        style={{ marginTop: "24px", marginBottom: "16px", textAlign: "center" }}
       >
         <img
           src="/assets/generated/steak-chase-title.dim_800x200.png"
           alt="STEAK CHASE"
           className="pixel-art"
           style={{
-            maxWidth: "min(700px, 90vw)",
+            maxWidth: "min(680px, 88vw)",
             height: "auto",
             filter:
-              "drop-shadow(0 0 20px rgba(240,192,48,0.4)) drop-shadow(0 4px 8px rgba(0,0,0,0.8))",
+              "drop-shadow(0 0 28px rgba(240,192,48,0.35)) drop-shadow(0 4px 12px rgba(0,0,0,0.9))",
           }}
           onError={(e) => {
-            // Fallback title if image fails
             const parent = e.currentTarget.parentElement;
             if (parent) {
               e.currentTarget.style.display = "none";
               const fallback = document.createElement("h1");
               fallback.textContent = "STEAK CHASE";
               fallback.style.cssText = `
-                font-family: 'JetBrains Mono', monospace;
-                font-size: clamp(2rem, 6vw, 4rem);
+                font-family: 'Outfit', sans-serif;
+                font-size: clamp(2.2rem, 7vw, 4.5rem);
                 font-weight: 900;
                 color: #f0c030;
-                text-shadow: 4px 4px 0 #5a4000, 0 0 40px rgba(240,192,48,0.5);
-                letter-spacing: 0.1em;
+                text-shadow: 0 0 40px rgba(240,192,48,0.45), 0 2px 0 rgba(0,0,0,0.8);
+                letter-spacing: 0.08em;
                 margin: 0;
               `;
               parent.appendChild(fallback);
@@ -109,13 +149,13 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
       {/* Byline */}
       <p
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: "0.65rem",
-          color: "#8aaa50",
-          letterSpacing: "0.08em",
-          marginTop: "-12px",
-          marginBottom: "20px",
-          textShadow: "1px 1px 0 #1a3000",
+          fontFamily: "'Outfit', sans-serif",
+          fontSize: "0.85rem",
+          fontWeight: 500,
+          color: "#a0b870",
+          letterSpacing: "0.1em",
+          marginTop: "-8px",
+          marginBottom: "24px",
         }}
       >
         by OP_Warden
@@ -125,10 +165,10 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
       <div
         style={{
           display: "flex",
-          gap: "24px",
+          gap: "20px",
           alignItems: "flex-start",
           width: "100%",
-          maxWidth: "900px",
+          maxWidth: "920px",
           flexWrap: "wrap",
           justifyContent: "center",
         }}
@@ -139,32 +179,32 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
           style={{
             flex: "1",
             minWidth: "280px",
-            maxWidth: "400px",
-            padding: "20px",
+            maxWidth: "410px",
+            padding: "22px",
           }}
         >
           {/* About section */}
-          <div style={{ marginBottom: "20px" }}>
+          <div style={{ marginBottom: "22px" }}>
             <h2
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "0.75rem",
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: "0.85rem",
                 fontWeight: 700,
                 color: "#f0c030",
                 letterSpacing: "0.1em",
                 marginBottom: "10px",
-                textShadow: "1px 1px 0 #5a4000",
+                textShadow: "0 0 10px rgba(240,192,48,0.2)",
               }}
             >
               THE HUNT
             </h2>
             <p
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "0.6rem",
-                color: "#ccc",
-                lineHeight: "1.8",
-                letterSpacing: "0.03em",
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: "0.8rem",
+                color: "#bbb",
+                lineHeight: "1.75",
+                letterSpacing: "0.01em",
               }}
             >
               Navigate the maze, eat all the meat to progress, and avoid the
@@ -176,13 +216,13 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
           <div style={{ marginBottom: "24px" }}>
             <h2
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "0.75rem",
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: "0.85rem",
                 fontWeight: 700,
                 color: "#f0c030",
                 letterSpacing: "0.1em",
                 marginBottom: "12px",
-                textShadow: "1px 1px 0 #5a4000",
+                textShadow: "0 0 10px rgba(240,192,48,0.2)",
               }}
             >
               HOW TO PLAY
@@ -205,28 +245,28 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
                   style={{
                     display: "flex",
                     alignItems: "flex-start",
-                    gap: "8px",
-                    background: "rgba(255,255,255,0.03)",
-                    padding: "6px 8px",
-                    border: "1px solid rgba(90,90,90,0.3)",
+                    gap: "10px",
+                    background: "rgba(255,255,255,0.04)",
+                    padding: "8px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255,255,255,0.05)",
                   }}
                 >
                   <span
                     style={{
-                      fontSize: "0.85rem",
+                      fontSize: "0.95rem",
                       flexShrink: 0,
-                      lineHeight: 1.2,
+                      lineHeight: 1.4,
                     }}
                   >
                     {icon}
                   </span>
                   <span
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: "0.55rem",
-                      color: "#bbb",
-                      lineHeight: "1.5",
-                      letterSpacing: "0.02em",
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "0.75rem",
+                      color: "#c0c0c0",
+                      lineHeight: "1.55",
                     }}
                   >
                     {text}
@@ -236,17 +276,17 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
             </div>
           </div>
 
-          {/* Collectibles legend */}
+          {/* Enemies section */}
           <div style={{ marginBottom: "24px" }}>
             <h2
               style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "0.75rem",
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: "0.85rem",
                 fontWeight: 700,
                 color: "#f0c030",
                 letterSpacing: "0.1em",
-                marginBottom: "10px",
-                textShadow: "1px 1px 0 #5a4000",
+                marginBottom: "12px",
+                textShadow: "0 0 10px rgba(240,192,48,0.2)",
               }}
             >
               ENEMIES
@@ -272,34 +312,36 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: "4px",
+                    gap: "6px",
                     background: "rgba(0,0,0,0.3)",
-                    padding: "8px",
-                    border: "1px solid #3a3a3a",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(120,120,120,0.12)",
                     flex: 1,
+                    backdropFilter: "blur(4px)",
                   }}
                 >
                   <img
                     src={src}
                     alt={label}
                     className="pixel-art"
-                    style={{ width: "36px", height: "36px" }}
+                    style={{ width: "38px", height: "38px" }}
                   />
                   <span
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: "0.55rem",
-                      color: "#ccc",
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "0.75rem",
                       fontWeight: 700,
+                      color: "#ddd",
                     }}
                   >
                     {label}
                   </span>
                   <span
                     style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: "0.5rem",
-                      color: "#888",
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "0.7rem",
+                      color: "#777",
                     }}
                   >
                     {speed}
@@ -318,22 +360,38 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
             style={{
               width: "100%",
               fontSize: "1rem",
-              padding: "14px",
-              letterSpacing: "0.15em",
+              padding: "15px",
+              letterSpacing: "0.14em",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
             }}
           >
-            ▶ PLAY GAME
+            <svg
+              width="14"
+              height="16"
+              viewBox="0 0 14 16"
+              fill="currentColor"
+              style={{ flexShrink: 0 }}
+              role="img"
+              aria-label="Play"
+            >
+              <title>Play</title>
+              <path d="M1 1l12 7-12 7V1z" />
+            </svg>
+            PLAY GAME
           </button>
 
-          {/* Mobile warning */}
+          {/* Mobile hint */}
           <p
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "0.5rem",
-              color: "#666",
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "0.7rem",
+              color: "#555",
               textAlign: "center",
               marginTop: "10px",
-              letterSpacing: "0.03em",
+              letterSpacing: "0.01em",
             }}
           >
             Best played on desktop with keyboard
@@ -350,12 +408,12 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
       <footer
         style={{
           marginTop: "auto",
-          paddingTop: "24px",
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: "0.5rem",
-          color: "#555",
+          paddingTop: "28px",
+          fontFamily: "'Outfit', sans-serif",
+          fontSize: "0.7rem",
+          color: "#444",
           textAlign: "center",
-          letterSpacing: "0.05em",
+          letterSpacing: "0.02em",
         }}
       >
         © {new Date().getFullYear()}. Built with love using{" "}
@@ -363,7 +421,11 @@ export function SplashScreen({ onPlay }: SplashScreenProps) {
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: "#5a8a2c", textDecoration: "none" }}
+          style={{
+            color: "#5a9030",
+            textDecoration: "none",
+            transition: "color 0.15s",
+          }}
         >
           caffeine.ai
         </a>

@@ -3,18 +3,29 @@ interface GameHUDProps {
   lives: number;
   level: number;
   powerUpActive: boolean;
+  muted: boolean;
+  onToggleMute: () => void;
 }
 
-export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
+export function GameHUD({
+  score,
+  lives,
+  level,
+  powerUpActive,
+  muted,
+  onToggleMute,
+}: GameHUDProps) {
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        background: "rgba(0,0,0,0.85)",
-        borderBottom: "3px solid #3a3a3a",
-        padding: "8px 16px",
+        background: "rgba(8,12,8,0.92)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        borderBottom: "1px solid rgba(80,120,40,0.25)",
+        padding: "8px 18px",
         gap: "12px",
       }}
     >
@@ -31,9 +42,10 @@ export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
       >
         <span
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.45rem",
-            color: "#888",
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "0.7rem",
+            fontWeight: 600,
+            color: "#6a7a60",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
           }}
@@ -42,12 +54,12 @@ export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
         </span>
         <span
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "1rem",
-            fontWeight: 700,
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "1.05rem",
+            fontWeight: 800,
             color: "#f0c030",
-            textShadow: "1px 1px 0 #5a4000",
-            letterSpacing: "0.05em",
+            textShadow: "0 0 10px rgba(240,192,48,0.35)",
+            letterSpacing: "0.03em",
           }}
         >
           {score.toLocaleString()}
@@ -66,9 +78,10 @@ export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
       >
         <span
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.45rem",
-            color: "#888",
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "0.7rem",
+            fontWeight: 600,
+            color: "#6a7a60",
             letterSpacing: "0.1em",
           }}
         >
@@ -82,10 +95,15 @@ export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
                 width: "24px",
                 height: "24px",
                 overflow: "hidden",
-                opacity: idx < lives ? 1 : 0.2,
-                transition: "opacity 0.2s",
-                border: idx < lives ? "1px solid #5a7a2a" : "1px solid #3a3a3a",
-                background: idx < lives ? "rgba(90,122,42,0.2)" : "transparent",
+                borderRadius: "5px",
+                opacity: idx < lives ? 1 : 0.18,
+                transition: "opacity 0.25s",
+                border:
+                  idx < lives
+                    ? "1px solid rgba(80,140,30,0.5)"
+                    : "1px solid rgba(60,60,60,0.3)",
+                background:
+                  idx < lives ? "rgba(70,120,30,0.18)" : "transparent",
               }}
             >
               <img
@@ -107,18 +125,20 @@ export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
             display: "flex",
             alignItems: "center",
             gap: "6px",
-            background: "rgba(64,128,255,0.2)",
-            border: "1px solid #4080ff",
-            padding: "4px 10px",
+            background: "rgba(50,100,220,0.12)",
+            border: "1px solid rgba(80,140,255,0.35)",
+            borderRadius: "8px",
+            padding: "5px 12px",
+            backdropFilter: "blur(4px)",
           }}
         >
           <span style={{ fontSize: "1rem" }}>🍎</span>
           <span
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "0.55rem",
-              color: "#80c0ff",
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "0.7rem",
               fontWeight: 700,
+              color: "#80c0ff",
               letterSpacing: "0.1em",
             }}
           >
@@ -127,38 +147,75 @@ export function GameHUD({ score, lives, level, powerUpActive }: GameHUDProps) {
         </div>
       )}
 
-      {/* Level */}
+      {/* Level + Mute */}
       <div
-        data-ocid="hud.level"
         style={{
           display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: "2px",
-          minWidth: "80px",
+          alignItems: "center",
+          gap: "10px",
         }}
       >
-        <span
+        <div
+          data-ocid="hud.level"
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.45rem",
-            color: "#888",
-            letterSpacing: "0.1em",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "2px",
+            minWidth: "52px",
           }}
         >
-          LEVEL
-        </span>
-        <span
+          <span
+            style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              color: "#6a7a60",
+              letterSpacing: "0.1em",
+            }}
+          >
+            LEVEL
+          </span>
+          <span
+            style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "1.05rem",
+              fontWeight: 800,
+              color: "#68e068",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {level}
+          </span>
+        </div>
+
+        {/* Mute toggle */}
+        <button
+          type="button"
+          data-ocid="hud.mute_toggle"
+          onClick={onToggleMute}
+          title={muted ? "Unmute sounds" : "Mute sounds"}
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
+            background: muted
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(90,160,40,0.1)",
+            border: muted
+              ? "1px solid rgba(255,255,255,0.08)"
+              : "1px solid rgba(100,180,50,0.3)",
+            borderRadius: "7px",
+            cursor: "pointer",
+            padding: "5px 8px",
             fontSize: "1rem",
-            fontWeight: 700,
-            color: "#5adf5a",
-            letterSpacing: "0.05em",
+            lineHeight: 1,
+            color: muted ? "#555" : "#aae060",
+            transition: "background 0.2s, border-color 0.2s, color 0.2s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          {level}
-        </span>
+          {muted ? "🔇" : "🔊"}
+        </button>
       </div>
     </div>
   );

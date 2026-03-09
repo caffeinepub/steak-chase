@@ -3,10 +3,12 @@ import {
   COLS,
   type Direction,
   ENEMY_STARTS,
+  EXPLOSION_RADIUS,
   type EnemyType,
   INITIAL_MAZE,
   PLAYER_SPEED,
   PLAYER_START,
+  PORTAL_PAIRS,
   POWER_UP_DURATION,
   POWER_UP_ENEMY_SPEED_MULTIPLIER,
   ROWS,
@@ -16,7 +18,11 @@ import {
   TILE_SIZE,
   ZOMBIE_SPEED,
 } from "./constants";
-import { bfsNextStep, randomAdjacentStep } from "./pathfinding";
+import {
+  bfsNextStep,
+  randomAdjacentStep,
+  straightLineStep,
+} from "./pathfinding";
 import { type RenderEnemy, preloadImages, renderFrame } from "./renderer";
 
 export interface GameEnemy {
@@ -30,6 +36,8 @@ export interface GameEnemy {
   startRow: number;
   dead: boolean; // sent back to ghost house
   respawnTimer: number;
+  // Skeleton straight-line direction (dc, dr)
+  straightDir: { col: number; row: number };
 }
 
 export interface GameState {
@@ -50,6 +58,8 @@ export interface GameState {
   paused: boolean;
   totalCollectibles: number;
   collectedCount: number;
+  // Explosion flash effect (timestamp when triggered)
+  explosionFlashUntil: number;
 }
 
 export interface GameCallbacks {
@@ -58,6 +68,13 @@ export interface GameCallbacks {
   onLevelChange: (level: number) => void;
   onGameOver: (score: number) => void;
   onPowerUpChange: (active: boolean) => void;
+  onCollect?: (
+    type: "steak" | "porkChop" | "goldenApple" | "explosion" | "portal",
+  ) => void;
+  onPowerUp?: () => void;
+  onEnemyEat?: () => void;
+  onLifeLost?: () => void;
+  onLevelComplete?: () => void;
 }
 
 function cloneMaze(maze: number[][]): number[][] {
@@ -98,6 +115,13 @@ export function useGameEngine(
   const initState = useCallback((level: number): GameState => {
     const maze = cloneMaze(INITIAL_MAZE);
     const total = countCollectibles(maze);
+    // Random initial directions for skeletons
+    const initDirs = [
+      { col: 1, row: 0 },
+      { col: -1, row: 0 },
+      { col: 0, row: 1 },
+      { col: 0, row: -1 },
+    ];
     const enemies: GameEnemy[] = ENEMY_STARTS.map((e, i) => ({
       id: i,
       col: e.col,
@@ -109,6 +133,7 @@ export function useGameEngine(
       startRow: e.row,
       dead: false,
       respawnTimer: 0,
+      straightDir: initDirs[i % initDirs.length],
     }));
 
     return {
@@ -129,6 +154,7 @@ export function useGameEngine(
       paused: false,
       totalCollectibles: total,
       collectedCount: 0,
+      explosionFlashUntil: 0,
     };
   }, []);
 
@@ -136,12 +162,19 @@ export function useGameEngine(
     state.player = { ...PLAYER_START };
     state.currentDirection = "none";
     state.pendingDirection = "none";
+    const initDirs = [
+      { col: 1, row: 0 },
+      { col: -1, row: 0 },
+      { col: 0, row: 1 },
+      { col: 0, row: -1 },
+    ];
     for (const e of state.enemies) {
       e.col = e.startCol;
       e.row = e.startRow;
       e.scared = false;
       e.dead = false;
       e.respawnTimer = 0;
+      e.straightDir = initDirs[e.id % initDirs.length];
     }
     state.powerUpActive = false;
     state.powerUpEndTime = 0;
@@ -202,11 +235,13 @@ export function useGameEngine(
       state.score += SCORE.STEAK;
       state.collectedCount++;
       callbacksRef.current?.onScoreChange(state.score);
+      callbacksRef.current?.onCollect?.("steak");
     } else if (cell === TILE.PORK_CHOP) {
       maze[player.row][player.col] = TILE.PATH;
       state.score += SCORE.PORK_CHOP;
       state.collectedCount++;
       callbacksRef.current?.onScoreChange(state.score);
+      callbacksRef.current?.onCollect?.("porkChop");
     } else if (cell === TILE.GOLDEN_APPLE) {
       maze[player.row][player.col] = TILE.PATH;
       state.score += SCORE.GOLDEN_APPLE;
@@ -219,6 +254,42 @@ export function useGameEngine(
       }
       callbacksRef.current?.onScoreChange(state.score);
       callbacksRef.current?.onPowerUpChange(true);
+      callbacksRef.current?.onCollect?.("goldenApple");
+    } else if (cell === TILE.EXPLOSION) {
+      // Explosion: clear enemies within radius, award score per enemy killed
+      maze[player.row][player.col] = TILE.PATH;
+      let killed = 0;
+      for (const e of state.enemies) {
+        if (e.dead) continue;
+        const dist =
+          Math.abs(e.col - player.col) + Math.abs(e.row - player.row);
+        if (dist <= EXPLOSION_RADIUS) {
+          e.dead = true;
+          e.respawnTimer = 4000;
+          killed++;
+        }
+      }
+      state.score += SCORE.EXPLOSION + killed * SCORE.ENEMY_BASE;
+      state.explosionFlashUntil = now + 400;
+      callbacksRef.current?.onScoreChange(state.score);
+      callbacksRef.current?.onCollect?.("explosion");
+      if (killed > 0) callbacksRef.current?.onEnemyEat?.();
+    } else if (cell === TILE.PORTAL) {
+      // Portal: teleport to paired portal
+      for (const [a, b] of PORTAL_PAIRS) {
+        if (player.col === a.col && player.row === a.row) {
+          player.col = b.col;
+          player.row = b.row;
+          callbacksRef.current?.onCollect?.("portal");
+          break;
+        }
+        if (player.col === b.col && player.row === b.row) {
+          player.col = a.col;
+          player.row = a.row;
+          callbacksRef.current?.onCollect?.("portal");
+          break;
+        }
+      }
     }
   }, []);
 
@@ -246,29 +317,45 @@ export function useGameEngine(
       if (now - enemy.lastMoveTime < effectiveSpeed) continue;
       enemy.lastMoveTime = now;
 
-      let next: { col: number; row: number } | null = null;
       if (state.powerUpActive && enemy.scared) {
-        // Flee randomly
-        next = randomAdjacentStep(
+        // Flee randomly (both types)
+        const next = randomAdjacentStep(
           state.maze,
           { col: enemy.col, row: enemy.row },
           ROWS,
           COLS,
         );
-      } else {
-        // Chase player via BFS
-        next = bfsNextStep(
+        if (next !== null) {
+          enemy.col = next.col;
+          enemy.row = next.row;
+        }
+      } else if (enemy.type === "zombie") {
+        // Zombie: slow but always chases player via BFS
+        const next = bfsNextStep(
           state.maze,
           { col: enemy.col, row: enemy.row },
           { col: state.player.col, row: state.player.row },
           ROWS,
           COLS,
         );
-      }
-
-      if (next !== null) {
-        enemy.col = next.col;
-        enemy.row = next.row;
+        if (next !== null) {
+          enemy.col = next.col;
+          enemy.row = next.row;
+        }
+      } else {
+        // Skeleton: fast but can only move in straight lines
+        const result = straightLineStep(
+          state.maze,
+          { col: enemy.col, row: enemy.row },
+          enemy.straightDir,
+          ROWS,
+          COLS,
+        );
+        if (result !== null) {
+          enemy.col = result.next.col;
+          enemy.row = result.next.row;
+          enemy.straightDir = result.newDir;
+        }
       }
     }
   }, []);
@@ -284,12 +371,14 @@ export function useGameEngine(
             state.score += reward;
             state.enemyEatChain++;
             callbacksRef.current?.onScoreChange(state.score);
+            callbacksRef.current?.onEnemyEat?.();
             enemy.dead = true;
             enemy.respawnTimer = 3000;
           } else {
             // Player dies
             state.lives--;
             callbacksRef.current?.onLivesChange(state.lives);
+            callbacksRef.current?.onLifeLost?.();
             if (state.lives <= 0) {
               state.gameOver = true;
               callbacksRef.current?.onGameOver(state.score);
@@ -321,6 +410,7 @@ export function useGameEngine(
       // Level complete bonus
       state.score += state.level * 500;
       callbacksRef.current?.onScoreChange(state.score);
+      callbacksRef.current?.onLevelComplete?.();
       state.levelComplete = true;
     }
   }, []);
@@ -382,6 +472,7 @@ export function useGameEngine(
               ? Math.max(0, state.powerUpEndTime - now)
               : 0,
             totalPowerUpDuration: POWER_UP_DURATION,
+            explosionFlash: now < state.explosionFlashUntil,
           },
           now - startTimeRef.current,
         );

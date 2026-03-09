@@ -1,10 +1,17 @@
-import { COLS, type EnemyType, ROWS, TILE, TILE_SIZE } from "./constants";
+import {
+  COLS,
+  type EnemyType,
+  PORTAL_PAIRS,
+  ROWS,
+  TILE,
+  TILE_SIZE,
+} from "./constants";
 
 // ─── Colors (literal values for Canvas API) ──────────────────────────────────
 const COLOR = {
-  DIRT_PATH: "#2a1d12",
+  DIRT_PATH: "#0f1a0a",
   WALL_TOP: "#5a7a2a",
-  WALL_MID: "#4a4a4a",
+  WALL_MID: "#1a1f14",
   WALL_DARK: "#2a2a2a",
   WALL_OUTLINE: "#1a1a1a",
   STEAK: "#c04a2a",
@@ -33,6 +40,7 @@ export interface RenderState {
   powerUpActive: boolean;
   powerUpTimeLeft: number;
   totalPowerUpDuration: number;
+  explosionFlash?: boolean;
 }
 
 // Image cache
@@ -56,51 +64,76 @@ export function preloadImages(): void {
 function drawWall(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   const s = TILE_SIZE;
 
-  // Base stone fill
+  // Base dark charcoal fill
   ctx.fillStyle = COLOR.WALL_MID;
   ctx.fillRect(x, y, s, s);
 
-  // Grass top strip
-  ctx.fillStyle = COLOR.WALL_TOP;
-  ctx.fillRect(x, y, s, 5);
+  // Bright grass cap — gradient from vivid green at top to darker green at bottom of cap (4px)
+  const grassGrad = ctx.createLinearGradient(x, y, x, y + 4);
+  grassGrad.addColorStop(0, "#55cc22");
+  grassGrad.addColorStop(1, "#2d6e0a");
+  ctx.fillStyle = grassGrad;
+  ctx.fillRect(x, y, s, 4);
 
-  // Darker lower half for depth
-  ctx.fillStyle = COLOR.WALL_DARK;
-  ctx.fillRect(x, y + s * 0.6, s, s * 0.4);
-
-  // Subtle stone texture lines
-  ctx.strokeStyle = "rgba(0,0,0,0.3)";
-  ctx.lineWidth = 1;
-  // Horizontal cracks
-  ctx.beginPath();
-  ctx.moveTo(x + 2, y + s * 0.35);
-  ctx.lineTo(x + s - 2, y + s * 0.35);
-  ctx.stroke();
-  // Vertical cracks
-  ctx.beginPath();
-  ctx.moveTo(x + s * 0.5, y + s * 0.35);
-  ctx.lineTo(x + s * 0.5, y + s * 0.7);
-  ctx.stroke();
-
-  // Highlight top-left
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  // Neon top-edge glow line at very top (y) — bright green 0.6 alpha
+  ctx.strokeStyle = "rgba(136,255,68,0.6)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + s, y);
-  ctx.moveTo(x, y);
-  ctx.lineTo(x, y + s);
+  ctx.moveTo(x, y + 0.5);
+  ctx.lineTo(x + s, y + 0.5);
   ctx.stroke();
 
-  // Dark outline
-  ctx.strokeStyle = COLOR.WALL_OUTLINE;
+  // Stone body: horizontal mortar lines
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(x, y + 10, s, 1);
+  ctx.fillRect(x, y + 18, s, 1);
+
+  // Stone body: vertical center mortar
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fillRect(x + Math.floor(s / 2), y + 4, 1, s - 4);
+
+  // Left edge highlight
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillRect(x, y, 1, s);
+
+  // Bottom shadow
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(x, y + s - 1, s, 1);
+
+  // Right shadow
+  ctx.fillRect(x + s - 1, y, 1, s);
+
+  // Thin outer stroke
+  ctx.strokeStyle = "rgba(0,0,0,0.8)";
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
 }
 
 function drawPath(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const s = TILE_SIZE;
+
+  // Dark base fill
   ctx.fillStyle = COLOR.DIRT_PATH;
-  ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+  ctx.fillRect(x, y, s, s);
+
+  // Subtle crosshatch grid — thin right edge + bottom edge per tile
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + s - 0.5, y);
+  ctx.lineTo(x + s - 0.5, y + s);
+  ctx.moveTo(x, y + s - 0.5);
+  ctx.lineTo(x + s, y + s - 0.5);
+  ctx.stroke();
+
+  // Very faint radial bioluminescent moss glow centered on tile
+  const cx = x + s / 2;
+  const cy = y + s / 2;
+  const mossGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * 0.7);
+  mossGrad.addColorStop(0, "rgba(80,180,40,0.04)");
+  mossGrad.addColorStop(1, "rgba(80,180,40,0)");
+  ctx.fillStyle = mossGrad;
+  ctx.fillRect(x, y, s, s);
 }
 
 function drawSteak(ctx: CanvasRenderingContext2D, x: number, y: number): void {
@@ -219,6 +252,136 @@ function drawGoldenApple(
   ctx.moveTo(cx, cy - r);
   ctx.lineTo(cx, cy - r - 3);
   ctx.stroke();
+}
+
+function drawExplosionTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+
+  // Pulsing outer glow
+  const pulse = 1 + 0.2 * Math.sin(time * 0.006);
+
+  // Orange-red glow
+  const glow = ctx.createRadialGradient(
+    cx,
+    cy,
+    2,
+    cx,
+    cy,
+    TILE_SIZE * 0.9 * pulse,
+  );
+  glow.addColorStop(0, "rgba(255,140,0,0.5)");
+  glow.addColorStop(0.5, "rgba(255,60,0,0.25)");
+  glow.addColorStop(1, "rgba(255,60,0,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, TILE_SIZE * 0.9 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bomb body — dark sphere
+  const r = 7;
+  const bodyGrad = ctx.createRadialGradient(cx - 2, cy - 2, 1, cx, cy, r);
+  bodyGrad.addColorStop(0, "#555");
+  bodyGrad.addColorStop(1, "#111");
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy + 1, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bomb shine
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.beginPath();
+  ctx.arc(cx - 2, cy - 1, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Fuse line
+  ctx.strokeStyle = "#8B4513";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx + 2, cy - r + 1);
+  ctx.quadraticCurveTo(cx + 6, cy - r - 4, cx + 5, cy - r - 7);
+  ctx.stroke();
+
+  // Spark at fuse tip — flickers
+  const sparkBright = Math.sin(time * 0.02) > 0;
+  ctx.fillStyle = sparkBright ? "#ffee00" : "#ff8800";
+  ctx.beginPath();
+  ctx.arc(cx + 5, cy - r - 7, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPortalTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const r = 10;
+
+  // Swirling background glow
+  const angle = (time * 0.003) % (Math.PI * 2);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  // Outer ring glow
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const gx = Math.cos(a) * r * 0.5;
+    const gy = Math.sin(a) * r * 0.5;
+    const sg = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * 0.8);
+    sg.addColorStop(0, "rgba(160,60,255,0.5)");
+    sg.addColorStop(1, "rgba(160,60,255,0)");
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(gx, gy, r * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Portal swirl rings
+  ctx.save();
+  ctx.translate(cx, cy);
+  for (let ring = 0; ring < 3; ring++) {
+    const ringR = r - ring * 3;
+    const alpha = 0.6 + ring * 0.1;
+    const hue = (time * 0.1 + ring * 40) % 360;
+    ctx.strokeStyle = `hsla(${270 + hue * 0.3}, 100%, 70%, ${alpha})`;
+    ctx.lineWidth = 1.5 - ring * 0.3;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Dark center void
+  const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.45);
+  voidGrad.addColorStop(0, "rgba(10,0,20,0.95)");
+  voidGrad.addColorStop(1, "rgba(80,0,140,0.3)");
+  ctx.fillStyle = voidGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Star sparkles
+  const sparkCount = 4;
+  for (let i = 0; i < sparkCount; i++) {
+    const sa = angle + (i / sparkCount) * Math.PI * 2;
+    const sr = r * 0.7;
+    const sx = Math.cos(sa) * sr;
+    const sy = Math.sin(sa) * sr;
+    ctx.fillStyle = "rgba(220,180,255,0.9)";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawSprite(
@@ -383,13 +546,14 @@ export function renderFrame(
     powerUpActive,
     powerUpTimeLeft,
     totalPowerUpDuration,
+    explosionFlash,
   } = state;
 
-  // Clear
-  ctx.fillStyle = "#1a1008";
+  // Clear — darker, more atmospheric base
+  ctx.fillStyle = "#0a110a";
   ctx.fillRect(0, 0, COLS * TILE_SIZE, ROWS * TILE_SIZE);
 
-  // Draw tiles
+  // Draw tiles (path + walls first pass)
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const x = col * TILE_SIZE;
@@ -401,6 +565,44 @@ export function renderFrame(
       if (cell === TILE.WALL) {
         drawWall(ctx, x, y);
       }
+    }
+  }
+
+  // Ambient wall glow pass — subtle green glow bleeding from walls into paths
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const cell = maze[row][col];
+      if (cell !== TILE.WALL) continue;
+      const x = col * TILE_SIZE;
+      const y = row * TILE_SIZE;
+      const cx = x + TILE_SIZE / 2;
+      const cy = y + TILE_SIZE / 2;
+      const wallGlow = ctx.createRadialGradient(
+        cx,
+        cy,
+        0,
+        cx,
+        cy,
+        TILE_SIZE * 1.1,
+      );
+      wallGlow.addColorStop(0, "rgba(60,160,20,0.06)");
+      wallGlow.addColorStop(1, "rgba(60,160,20,0)");
+      ctx.fillStyle = wallGlow;
+      ctx.fillRect(x - TILE_SIZE, y - TILE_SIZE, TILE_SIZE * 3, TILE_SIZE * 3);
+    }
+  }
+
+  // Tiny glowing dot for plain PATH tiles (value 0) — skip ghost house center (rows 8–12, cols 6–12)
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      if (maze[row][col] !== TILE.PATH) continue;
+      if (row >= 8 && row <= 12 && col >= 6 && col <= 12) continue;
+      const cx = col * TILE_SIZE + TILE_SIZE / 2;
+      const cy = row * TILE_SIZE + TILE_SIZE / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,220,80,0.5)";
+      ctx.fill();
     }
   }
 
@@ -417,17 +619,46 @@ export function renderFrame(
         drawPorkChop(ctx, x, y);
       } else if (cell === TILE.GOLDEN_APPLE) {
         drawGoldenApple(ctx, x, y, frameTime);
+      } else if (cell === TILE.EXPLOSION) {
+        drawExplosionTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.PORTAL) {
+        drawPortalTile(ctx, x, y, frameTime);
       }
     }
   }
 
-  // Power-up timer bar
+  // Portal connection lines between paired portals
+  for (const [a, b] of PORTAL_PAIRS) {
+    if (
+      maze[a.row][a.col] === TILE.PORTAL &&
+      maze[b.row][b.col] === TILE.PORTAL
+    ) {
+      const ax = a.col * TILE_SIZE + TILE_SIZE / 2;
+      const ay = a.row * TILE_SIZE + TILE_SIZE / 2;
+      const bx = b.col * TILE_SIZE + TILE_SIZE / 2;
+      const by = b.row * TILE_SIZE + TILE_SIZE / 2;
+      const alpha = 0.08 + 0.05 * Math.sin(frameTime * 0.003);
+      ctx.strokeStyle = `rgba(160,60,255,${alpha})`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 8]);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Power-up timer bar — gradient from lime-green to gold
   if (powerUpActive && powerUpTimeLeft > 0) {
     const barWidth =
       COLS * TILE_SIZE * (powerUpTimeLeft / totalPowerUpDuration);
+    const powerBarGrad = ctx.createLinearGradient(0, 0, COLS * TILE_SIZE, 0);
+    powerBarGrad.addColorStop(0, "#aaff44");
+    powerBarGrad.addColorStop(1, "#f0c030");
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, COLS * TILE_SIZE, 4);
-    ctx.fillStyle = COLOR.POWER_BAR;
+    ctx.fillStyle = powerBarGrad;
     ctx.fillRect(0, 0, barWidth, 4);
   }
 
@@ -459,4 +690,10 @@ export function renderFrame(
     playerDirection,
     frameTime,
   );
+
+  // Explosion flash overlay
+  if (explosionFlash) {
+    ctx.fillStyle = "rgba(255,120,0,0.35)";
+    ctx.fillRect(0, 0, COLS * TILE_SIZE, ROWS * TILE_SIZE);
+  }
 }

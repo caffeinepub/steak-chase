@@ -10,6 +10,8 @@ export const TILE = {
   STEAK: 2,
   GOLDEN_APPLE: 3,
   PORK_CHOP: 4,
+  EXPLOSION: 5,
+  PORTAL: 6,
 } as const;
 
 export const SCORE = {
@@ -17,13 +19,25 @@ export const SCORE = {
   PORK_CHOP: 30,
   GOLDEN_APPLE: 50,
   ENEMY_BASE: 200,
+  EXPLOSION: 150,
 } as const;
 
 export const POWER_UP_DURATION = 8000; // ms
 export const PLAYER_SPEED = 200; // ms per tile
-export const ZOMBIE_SPEED = 320; // ms per tile (base)
-export const SKELETON_SPEED = 260; // ms per tile (base)
+export const ZOMBIE_SPEED = 420; // ms per tile (base) — slow but tracks player via BFS
+export const SKELETON_SPEED = 180; // ms per tile (base) — fast but straight-line only
 export const POWER_UP_ENEMY_SPEED_MULTIPLIER = 2.2;
+export const EXPLOSION_RADIUS = 3; // tiles
+
+// Portal tile positions (paired): [A, B] — stepping on A teleports to B and vice versa
+export const PORTAL_PAIRS: Array<
+  [{ col: number; row: number }, { col: number; row: number }]
+> = [
+  [
+    { col: 1, row: 6 },
+    { col: 17, row: 6 },
+  ],
+];
 
 export const INITIAL_MAZE: number[][] = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -31,8 +45,8 @@ export const INITIAL_MAZE: number[][] = [
   [1, 3, 1, 1, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 3, 1],
   [1, 2, 1, 1, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1],
   [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
-  [1, 2, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 2, 1],
-  [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 2, 1],
+  [1, 2, 1, 1, 2, 1, 2, 1, 1, 5, 1, 1, 2, 1, 2, 1, 1, 2, 1],
+  [1, 6, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 6, 1],
   [1, 1, 1, 1, 2, 1, 1, 1, 0, 1, 0, 1, 1, 1, 2, 1, 1, 1, 1],
   [1, 1, 1, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1, 1, 1, 1],
   [1, 1, 1, 1, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 2, 1, 1, 1, 1],
@@ -41,7 +55,7 @@ export const INITIAL_MAZE: number[][] = [
   [1, 1, 1, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1, 1, 1, 1],
   [1, 1, 1, 1, 2, 1, 0, 1, 1, 1, 1, 1, 0, 1, 2, 1, 1, 1, 1],
   [1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1],
-  [1, 2, 1, 1, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1],
+  [1, 2, 1, 1, 2, 1, 1, 1, 2, 5, 2, 1, 1, 1, 2, 1, 1, 2, 1],
   [1, 3, 2, 1, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 3, 1],
   [1, 1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 1, 1],
   [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 2, 1],

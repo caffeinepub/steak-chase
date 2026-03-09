@@ -64,25 +64,25 @@ export function Leaderboard({
       className={`mc-inventory ${className}`}
       data-ocid="splash.leaderboard.table"
       style={{
-        padding: compact ? "12px" : "16px",
+        padding: compact ? "14px" : "18px",
         minWidth: compact ? "280px" : "320px",
       }}
     >
       {/* Header */}
       <div
         style={{
-          borderBottom: "2px solid #5a5a5a",
-          paddingBottom: "8px",
-          marginBottom: "10px",
+          borderBottom: "1px solid rgba(100,160,50,0.15)",
+          paddingBottom: "10px",
+          marginBottom: "12px",
         }}
       >
         <h3
           className="gold-text"
           style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: compact ? "0.7rem" : "0.8rem",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: compact ? "0.9rem" : "1rem",
+            fontWeight: 800,
+            letterSpacing: "0.07em",
             margin: 0,
             textAlign: "center",
           }}
@@ -95,23 +95,23 @@ export function Leaderboard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "40px 1fr 80px",
+          gridTemplateColumns: "44px 1fr 80px",
           gap: "4px",
-          padding: "4px 6px",
-          marginBottom: "4px",
-          background: "rgba(255,255,255,0.04)",
-          borderBottom: "1px solid #3a3a3a",
+          padding: "5px 8px",
+          marginBottom: "6px",
+          background: "rgba(255,255,255,0.03)",
+          borderRadius: "6px",
         }}
       >
         {["RANK", "NAME", "SCORE"].map((h) => (
           <span
             key={h}
             style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "0.55rem",
-              color: "#888",
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "0.7rem",
               fontWeight: 700,
-              letterSpacing: "0.1em",
+              color: "#666",
+              letterSpacing: "0.08em",
               textAlign: h === "SCORE" ? "right" : "left",
             }}
           >
@@ -126,11 +126,10 @@ export function Leaderboard({
           data-ocid="splash.leaderboard.loading_state"
           style={{
             textAlign: "center",
-            padding: "20px",
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.65rem",
-            color: "#888",
-            letterSpacing: "0.05em",
+            padding: "22px",
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "0.78rem",
+            color: "#777",
           }}
         >
           Loading scores...
@@ -143,9 +142,9 @@ export function Leaderboard({
           data-ocid="splash.leaderboard.error_state"
           style={{
             textAlign: "center",
-            padding: "12px",
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.6rem",
+            padding: "14px",
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "0.72rem",
             color: "#c04a2a",
           }}
         >
@@ -166,32 +165,33 @@ export function Leaderboard({
               data-ocid={ocid}
               style={{
                 display: "grid",
-                gridTemplateColumns: "40px 1fr 80px",
+                gridTemplateColumns: "44px 1fr 80px",
                 gap: "4px",
-                padding: "5px 6px",
+                padding: "6px 8px",
                 background: isTopThree
-                  ? "rgba(240,192,48,0.06)"
+                  ? "rgba(240,192,48,0.05)"
                   : index % 2 === 0
-                    ? "rgba(255,255,255,0.02)"
+                    ? "rgba(255,255,255,0.018)"
                     : "transparent",
-                borderBottom: "1px solid rgba(90,90,90,0.3)",
+                borderRadius: "6px",
+                marginBottom: "2px",
                 transition: "background 0.15s",
               }}
             >
               {/* Rank */}
               <span
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "0.65rem",
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "0.78rem",
+                  fontWeight: isTopThree ? 700 : 400,
                   color:
                     rank === 1
                       ? "#f0c030"
                       : rank === 2
-                        ? "#c0c0c0"
+                        ? "#c8c8c8"
                         : rank === 3
                           ? "#c87040"
-                          : "#666",
-                  fontWeight: isTopThree ? 700 : 400,
+                          : "#555",
                 }}
               >
                 {formatRank(rank)}
@@ -200,10 +200,10 @@ export function Leaderboard({
               {/* Name */}
               <span
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "0.65rem",
-                  color: isTopThree ? "#e8e8e8" : "#aaa",
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "0.78rem",
                   fontWeight: isTopThree ? 700 : 400,
+                  color: isTopThree ? "#e8e8e8" : "#999",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -212,13 +212,13 @@ export function Leaderboard({
                 {entry.playerName}
               </span>
 
-              {/* Score */}
+              {/* Score — keep mono for number alignment */}
               <span
                 style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: "0.65rem",
-                  color: isTopThree ? "#f0c030" : "#aaa",
+                  fontSize: "0.72rem",
                   fontWeight: isTopThree ? 700 : 400,
+                  color: isTopThree ? "#f0c030" : "#888",
                   textAlign: "right",
                 }}
               >
@@ -234,10 +234,10 @@ export function Leaderboard({
           data-ocid="splash.leaderboard.empty_state"
           style={{
             textAlign: "center",
-            padding: "20px",
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.65rem",
-            color: "#666",
+            padding: "22px",
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: "0.78rem",
+            color: "#555",
           }}
         >
           No scores yet. Be the first!
@@ -247,14 +247,13 @@ export function Leaderboard({
       {/* Footer note */}
       <div
         style={{
-          marginTop: "8px",
-          paddingTop: "6px",
-          borderTop: "1px solid #3a3a3a",
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: "0.5rem",
-          color: "#555",
+          marginTop: "10px",
+          paddingTop: "8px",
+          borderTop: "1px solid rgba(100,160,50,0.1)",
+          fontFamily: "'Outfit', sans-serif",
+          fontSize: "0.68rem",
+          color: "#444",
           textAlign: "center",
-          letterSpacing: "0.05em",
         }}
       >
         {isLoading

@@ -18,28 +18,28 @@
 
 @layer base {
   :root {
-    --radius: 0.25rem;
+    --radius: 0.5rem;
 
-    /* Minecraft dark overworld palette */
-    --background: 0.16 0.015 120;
+    /* Deep charcoal-slate base — rich dark atmosphere */
+    --background: 0.09 0.008 240;
     --foreground: 0.95 0.02 90;
 
-    --card: 0.2 0.01 100;
+    --card: 0.13 0.01 220;
     --card-foreground: 0.95 0.02 90;
 
-    --popover: 0.2 0.01 100;
+    --popover: 0.13 0.01 220;
     --popover-foreground: 0.95 0.02 90;
 
     /* Minecraft emerald green */
-    --primary: 0.52 0.18 145;
+    --primary: 0.55 0.2 145;
     --primary-foreground: 0.97 0 0;
 
     /* Stone gray secondary */
-    --secondary: 0.3 0.01 100;
+    --secondary: 0.22 0.01 220;
     --secondary-foreground: 0.9 0.02 90;
 
-    --muted: 0.25 0.01 100;
-    --muted-foreground: 0.6 0.02 90;
+    --muted: 0.18 0.01 220;
+    --muted-foreground: 0.58 0.02 90;
 
     /* Gold accent */
     --accent: 0.78 0.18 85;
@@ -48,24 +48,24 @@
     --destructive: 0.55 0.22 25;
     --destructive-foreground: 0.97 0 0;
 
-    --border: 0.3 0.01 100;
-    --input: 0.28 0.01 100;
-    --ring: 0.52 0.18 145;
+    --border: 0.22 0.01 220;
+    --input: 0.2 0.01 220;
+    --ring: 0.55 0.2 145;
 
     --chart-1: 0.78 0.18 85;
-    --chart-2: 0.52 0.18 145;
+    --chart-2: 0.55 0.2 145;
     --chart-3: 0.55 0.22 25;
     --chart-4: 0.6 0.15 200;
     --chart-5: 0.65 0.18 300;
 
-    --sidebar: 0.18 0.01 100;
+    --sidebar: 0.11 0.008 220;
     --sidebar-foreground: 0.95 0.02 90;
-    --sidebar-primary: 0.52 0.18 145;
+    --sidebar-primary: 0.55 0.2 145;
     --sidebar-primary-foreground: 0.97 0 0;
     --sidebar-accent: 0.78 0.18 85;
     --sidebar-accent-foreground: 0.12 0.02 60;
-    --sidebar-border: 0.3 0.01 100;
-    --sidebar-ring: 0.52 0.18 145;
+    --sidebar-border: 0.22 0.01 220;
+    --sidebar-ring: 0.55 0.2 145;
   }
 
   * {
@@ -75,113 +75,130 @@
   body {
     @apply bg-background text-foreground;
     font-family: "Outfit", sans-serif;
-    image-rendering: pixelated;
+    background-color: #0a0c10;
   }
 }
 
-/* Minecraft pixel font (loaded from Google Fonts via link tag in index.html or direct import) */
-/* We use JetBrains Mono as monospace fallback for pixel aesthetic */
-
-/* Pixelated rendering for game elements */
+/* Pixelated rendering only for pixel-art game elements */
 .pixel-art {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
-/* Minecraft-style button */
+/* Modern game button — glass + green glow style */
 .mc-button {
   display: inline-block;
-  font-family: "JetBrains Mono", monospace;
+  font-family: "Outfit", sans-serif;
   font-weight: 700;
   font-size: 0.85rem;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #fff;
-  background: #5a8a2c;
-  border: none;
-  border-top: 3px solid #7eb84a;
-  border-left: 3px solid #7eb84a;
-  border-bottom: 3px solid #2d4e12;
-  border-right: 3px solid #2d4e12;
+  background: linear-gradient(160deg, #5a9030 0%, #487524 100%);
+  border: 1px solid rgba(100, 180, 50, 0.35);
+  border-radius: 10px;
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 0.05s;
-  image-rendering: pixelated;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: background 0.2s, box-shadow 0.2s, transform 0.12s, border-color 0.2s;
 }
 
 .mc-button:hover {
-  background: #6aaa38;
-  filter: brightness(1.1);
+  background: linear-gradient(160deg, #6aaa38 0%, #558a2c 100%);
+  border-color: rgba(120, 200, 60, 0.5);
+  box-shadow: 0 0 20px rgba(90, 160, 40, 0.35), 0 6px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .mc-button:active {
-  border-top: 3px solid #2d4e12;
-  border-left: 3px solid #2d4e12;
-  border-bottom: 3px solid #7eb84a;
-  border-right: 3px solid #7eb84a;
   transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+.mc-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Gold variant */
 .mc-button-gold {
-  background: #c8960c;
-  border-top: 3px solid #f0c030;
-  border-left: 3px solid #f0c030;
-  border-bottom: 3px solid #5a4000;
-  border-right: 3px solid #5a4000;
+  background: linear-gradient(160deg, #c8960c 0%, #a87808 100%);
+  border-color: rgba(220, 170, 30, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .mc-button-gold:hover {
-  background: #daa520;
+  background: linear-gradient(160deg, #daa520 0%, #c09010 100%);
+  border-color: rgba(240, 192, 48, 0.5);
+  box-shadow: 0 0 20px rgba(200, 150, 20, 0.3), 0 6px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/* Stone block panel */
+/* Glass panel — rich dark glass morphism */
 .mc-panel {
-  background: #3c3c3c;
-  border: 3px solid #555;
-  border-top-color: #7a7a7a;
-  border-left-color: #7a7a7a;
-  box-shadow: 3px 3px 0 #1a1a1a;
+  background: rgba(20, 24, 18, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(120, 180, 60, 0.18);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-/* Inventory/chest panel */
+/* Inventory/leaderboard panel — deeper glass */
 .mc-inventory {
-  background: #1d1d1d;
-  border: 3px solid #5a5a5a;
-  border-top-color: #8a8a8a;
-  border-left-color: #8a8a8a;
-  box-shadow: 4px 4px 0 #000;
+  background: rgba(14, 18, 14, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(100, 160, 50, 0.15);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 /* Gold text glow */
 .gold-text {
   color: #f0c030;
-  text-shadow: 2px 2px 0 #5a4000, 0 0 20px rgba(240, 192, 48, 0.4);
+  text-shadow: 0 0 12px rgba(240, 192, 48, 0.3), 0 0 24px rgba(240, 192, 48, 0.15);
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
-  border: 1px solid #3a3a3a;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #5a5a5a;
-  border: 1px solid #7a7a7a;
+  background: rgba(120, 180, 60, 0.25);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 180, 60, 0.4);
 }
 
 /* Power-up flash animation */
 @keyframes powerup-flash {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.5; }
 }
 
 .powerup-active {
-  animation: powerup-flash 0.5s infinite;
+  animation: powerup-flash 0.6s infinite;
+}
+
+/* Subtle glow pulse for atmosphere */
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.07; }
+}
+
+.atmosphere-glow {
+  animation: glow-pulse 4s ease-in-out infinite;
 }
 
 /* Game canvas pixel rendering */
