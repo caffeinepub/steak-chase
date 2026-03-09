@@ -1,15 +1,18 @@
 import { useState } from "react";
+import type { SessionStats } from "../game/useGameEngine";
 import { useAddScore } from "../hooks/useLeaderboard";
 
 interface GameOverScreenProps {
   score: number;
   level: number;
+  stats: SessionStats;
   onReturnToMenu: () => void;
 }
 
 export function GameOverScreen({
   score,
   level,
+  stats,
   onReturnToMenu,
 }: GameOverScreenProps) {
   const [playerName, setPlayerName] = useState("");
@@ -163,6 +166,67 @@ export function GameOverScreen({
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Session stats */}
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            justifyContent: "center",
+            marginBottom: "20px",
+          }}
+        >
+          {[
+            { icon: "☠️", label: "Enemies", value: stats.enemiesDefeated },
+            {
+              icon: "⭐",
+              label: "Rare Items",
+              value: stats.rareItemsCollected,
+            },
+            { icon: "💀", label: "Bosses", value: stats.bossesDefeated },
+          ].map(({ icon, label, value }) => (
+            <div
+              key={label}
+              style={{
+                flex: 1,
+                background: "rgba(0,0,0,0.3)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: "9px",
+                padding: "10px 6px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: "1rem", marginBottom: "3px" }}>
+                {icon}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "1.25rem",
+                  fontWeight: 900,
+                  color: "#f0c030",
+                  textShadow: "0 0 8px rgba(240,192,48,0.3)",
+                  lineHeight: 1,
+                }}
+              >
+                {value}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "0.55rem",
+                  fontWeight: 600,
+                  color: "#666",
+                  letterSpacing: "0.07em",
+                  marginTop: "3px",
+                  textTransform: "uppercase",
+                }}
+              >
+                {label}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Score submission */}

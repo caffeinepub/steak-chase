@@ -2,12 +2,16 @@ import {
   BOSS_COL,
   BOSS_ROW,
   COLS,
+  COMPASS_DURATION,
   type EnemyType,
+  LEVEL_PALETTES,
+  NETHER_STAR_DURATION,
   PORTAL_PAIRS,
   ROWS,
   TILE,
   TILE_SIZE,
 } from "./constants";
+import type { Point } from "./pathfinding";
 
 // ─── Colors (literal values for Canvas API) ──────────────────────────────────
 const COLOR = {
@@ -42,6 +46,7 @@ export interface RenderState {
   powerUpActive: boolean;
   powerUpTimeLeft: number;
   totalPowerUpDuration: number;
+  level?: number; // current game level (1-10) — used for palette
   explosionFlash?: boolean;
   bossPhase?: boolean;
   bossLevel?: number;
@@ -53,6 +58,14 @@ export interface RenderState {
   freezeTimeLeft?: number;
   speedBoostActive?: boolean;
   speedBoostTimeLeft?: number;
+  netherStarActive?: boolean;
+  netherStarTimeLeft?: number;
+  diamondSwordFlash?: boolean;
+  compassActive?: boolean;
+  compassPath?: Point[];
+  compassTimeLeft?: number;
+  // Rare item — pulsing glow when active, flashing when about to expire
+  rareItemTimeLeft?: number; // ms remaining, 0 = no rare item
 }
 
 // Image cache
@@ -73,22 +86,27 @@ export function preloadImages(): void {
   loadImage("/assets/generated/skeleton-enemy-transparent.dim_64x64.png");
 }
 
-function drawWall(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+function drawWall(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  palette: (typeof LEVEL_PALETTES)[0],
+): void {
   const s = TILE_SIZE;
 
   // Base dark charcoal fill
-  ctx.fillStyle = COLOR.WALL_MID;
+  ctx.fillStyle = palette.wallMid;
   ctx.fillRect(x, y, s, s);
 
   // Bright grass cap — gradient from vivid green at top to darker green at bottom of cap (4px)
   const grassGrad = ctx.createLinearGradient(x, y, x, y + 4);
-  grassGrad.addColorStop(0, "#55cc22");
-  grassGrad.addColorStop(1, "#2d6e0a");
+  grassGrad.addColorStop(0, palette.grassCap[0]);
+  grassGrad.addColorStop(1, palette.grassCap[1]);
   ctx.fillStyle = grassGrad;
   ctx.fillRect(x, y, s, 4);
 
-  // Neon top-edge glow line at very top (y) — bright green 0.6 alpha
-  ctx.strokeStyle = "rgba(136,255,68,0.6)";
+  // Neon top-edge glow line at very top (y)
+  ctx.strokeStyle = palette.neonGlow;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x, y + 0.5);
@@ -121,11 +139,16 @@ function drawWall(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
 }
 
-function drawPath(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+function drawPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  palette: (typeof LEVEL_PALETTES)[0],
+): void {
   const s = TILE_SIZE;
 
   // Dark base fill
-  ctx.fillStyle = COLOR.DIRT_PATH;
+  ctx.fillStyle = palette.floorBase;
   ctx.fillRect(x, y, s, s);
 
   // Subtle crosshatch grid — thin right edge + bottom edge per tile
@@ -138,7 +161,7 @@ function drawPath(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.lineTo(x + s, y + s - 0.5);
   ctx.stroke();
 
-  // Very faint radial bioluminescent moss glow centered on tile
+  // Very faint radial bioluminescent glow centered on tile
   const cx = x + s / 2;
   const cy = y + s / 2;
   const mossGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s * 0.7);
@@ -545,6 +568,262 @@ function drawSpeedBoostTile(
   ctx.strokeStyle = "rgba(180,120,0,0.6)";
   ctx.lineWidth = 0.8;
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawNetherStarTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const pulse = 1 + 0.2 * Math.abs(Math.sin(time * 0.006));
+  const r = 9 * pulse;
+
+  // Purple-white outer glow
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r * 2.2);
+  glow.addColorStop(0, "rgba(220,120,255,0.6)");
+  glow.addColorStop(0.5, "rgba(180,60,255,0.25)");
+  glow.addColorStop(1, "rgba(180,60,255,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 8-pointed star (two overlapping squares rotated 45°)
+  ctx.save();
+  ctx.translate(cx, cy);
+  for (let sq = 0; sq < 2; sq++) {
+    ctx.save();
+    ctx.rotate((sq * Math.PI) / 4 + time * 0.001);
+    const starGrad = ctx.createLinearGradient(-r, 0, r, 0);
+    starGrad.addColorStop(0, "#cc40ff");
+    starGrad.addColorStop(0.5, "#ffffff");
+    starGrad.addColorStop(1, "#cc40ff");
+    ctx.fillStyle = starGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.38, -r * 0.38);
+    ctx.lineTo(r, 0);
+    ctx.lineTo(r * 0.38, r * 0.38);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r * 0.38, r * 0.38);
+    ctx.lineTo(-r, 0);
+    ctx.lineTo(-r * 0.38, -r * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  // Bright center
+  const centerGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.4);
+  centerGrad.addColorStop(0, "#ffffff");
+  centerGrad.addColorStop(1, "rgba(220,180,255,0)");
+  ctx.fillStyle = centerGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawDiamondSwordTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const pulse = 1 + 0.12 * Math.sin(time * 0.007);
+
+  // Cyan-blue glow
+  const glow = ctx.createRadialGradient(
+    cx,
+    cy,
+    1,
+    cx,
+    cy,
+    TILE_SIZE * 0.95 * pulse,
+  );
+  glow.addColorStop(0, "rgba(80,220,255,0.55)");
+  glow.addColorStop(0.5, "rgba(40,160,255,0.22)");
+  glow.addColorStop(1, "rgba(20,100,255,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, TILE_SIZE * 0.95 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Diamond Sword — drawn at 45° angle, blade pointing top-right
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-Math.PI / 4);
+  ctx.scale(pulse, pulse);
+
+  // Blade — thin diamond-blue rectangle
+  const bladeGrad = ctx.createLinearGradient(-1, -10, 1, 10);
+  bladeGrad.addColorStop(0, "#b0f8ff");
+  bladeGrad.addColorStop(0.4, "#30c8ff");
+  bladeGrad.addColorStop(1, "#0068cc");
+  ctx.fillStyle = bladeGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, -10); // tip
+  ctx.lineTo(2.5, -5);
+  ctx.lineTo(2.5, 5);
+  ctx.lineTo(0, 6);
+  ctx.lineTo(-2.5, 5);
+  ctx.lineTo(-2.5, -5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,80,160,0.7)";
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+
+  // Cross guard
+  ctx.fillStyle = "#a0c8ff";
+  ctx.fillRect(-5, 5, 10, 2);
+  ctx.strokeStyle = "rgba(0,60,140,0.6)";
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(-5, 5, 10, 2);
+
+  // Handle
+  ctx.fillStyle = "#8B4513";
+  ctx.fillRect(-1.5, 7, 3, 5);
+
+  // Pommel
+  ctx.fillStyle = "#aaaaaa";
+  ctx.beginPath();
+  ctx.arc(0, 12, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawRareItemGlow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+  timeLeft: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+
+  // Flash rapidly when < 5 seconds left
+  const isUrgent = timeLeft < 5000;
+  const flashVisible = !isUrgent || Math.sin(time * 0.03) > 0;
+  if (!flashVisible) return;
+
+  // Big outer pulse ring
+  const pulse = 1 + 0.3 * Math.abs(Math.sin(time * 0.006));
+  const urgentBoost = isUrgent ? 1 + 0.4 * Math.abs(Math.sin(time * 0.02)) : 1;
+  const glowR = TILE_SIZE * 1.6 * pulse * urgentBoost;
+
+  // Rotating outer ring
+  const ringAngle = time * 0.004;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(ringAngle);
+
+  // Outer glow burst
+  const burst = ctx.createRadialGradient(0, 0, TILE_SIZE * 0.2, 0, 0, glowR);
+  burst.addColorStop(0, `rgba(255,215,0,${0.5 * urgentBoost})`);
+  burst.addColorStop(0.35, `rgba(255,140,0,${0.25 * urgentBoost})`);
+  burst.addColorStop(0.7, `rgba(255,60,200,${0.12 * urgentBoost})`);
+  burst.addColorStop(1, "rgba(255,0,100,0)");
+  ctx.fillStyle = burst;
+  ctx.beginPath();
+  ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spinning sparkle rays
+  const rayCount = 8;
+  for (let i = 0; i < rayCount; i++) {
+    const angle = (i / rayCount) * Math.PI * 2;
+    const rayAlpha = 0.6 + 0.35 * Math.sin(time * 0.008 + i);
+    ctx.strokeStyle = `rgba(255,220,60,${rayAlpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(
+      Math.cos(angle) * TILE_SIZE * 0.55,
+      Math.sin(angle) * TILE_SIZE * 0.55,
+    );
+    ctx.lineTo(
+      Math.cos(angle) * TILE_SIZE * 1.1,
+      Math.sin(angle) * TILE_SIZE * 1.1,
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawCompassTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const spin = time * 0.003;
+  const r = 9;
+
+  // Warm amber glow
+  const glow = ctx.createRadialGradient(cx, cy, 1, cx, cy, TILE_SIZE);
+  glow.addColorStop(0, "rgba(255,200,60,0.5)");
+  glow.addColorStop(0.5, "rgba(255,150,0,0.2)");
+  glow.addColorStop(1, "rgba(255,100,0,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, TILE_SIZE, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(200,160,60,0.9)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Inner face
+  const faceGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  faceGrad.addColorStop(0, "rgba(40,30,10,0.9)");
+  faceGrad.addColorStop(1, "rgba(20,15,5,0.95)");
+  ctx.fillStyle = faceGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spinning needle — red tip (north) / white tail (south)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(spin);
+
+  // Red half (points "north" = safe direction)
+  ctx.beginPath();
+  ctx.moveTo(0, -(r - 2));
+  ctx.lineTo(2.2, 0);
+  ctx.lineTo(-2.2, 0);
+  ctx.closePath();
+  ctx.fillStyle = "#ff4444";
+  ctx.fill();
+
+  // White half
+  ctx.beginPath();
+  ctx.moveTo(0, r - 2);
+  ctx.lineTo(2.2, 0);
+  ctx.lineTo(-2.2, 0);
+  ctx.closePath();
+  ctx.fillStyle = "#eeeeee";
+  ctx.fill();
+
+  // Center pivot dot
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd700";
+  ctx.fill();
+
   ctx.restore();
 }
 
@@ -1166,6 +1445,7 @@ export function renderFrame(
     powerUpActive,
     powerUpTimeLeft,
     totalPowerUpDuration,
+    level,
     explosionFlash,
     bossPhase,
     bossLevel,
@@ -1177,10 +1457,21 @@ export function renderFrame(
     freezeTimeLeft,
     speedBoostActive,
     speedBoostTimeLeft,
+    netherStarActive,
+    netherStarTimeLeft,
+    diamondSwordFlash,
+    compassActive,
+    compassPath,
+    compassTimeLeft,
+    rareItemTimeLeft,
   } = state;
 
+  // Resolve palette for this level (clamp to available palettes)
+  const paletteIdx = Math.min((level ?? 1) - 1, LEVEL_PALETTES.length - 1);
+  const palette = LEVEL_PALETTES[Math.max(0, paletteIdx)];
+
   // Clear — darker, more atmospheric base
-  ctx.fillStyle = "#0a110a";
+  ctx.fillStyle = palette.floorBase;
   ctx.fillRect(0, 0, COLS * TILE_SIZE, ROWS * TILE_SIZE);
 
   // Draw tiles (path + walls first pass)
@@ -1190,15 +1481,19 @@ export function renderFrame(
       const y = row * TILE_SIZE;
       const cell = maze[row][col];
 
-      drawPath(ctx, x, y);
+      drawPath(ctx, x, y, palette);
 
       if (cell === TILE.WALL) {
-        drawWall(ctx, x, y);
+        drawWall(ctx, x, y, palette);
       }
     }
   }
 
-  // Ambient wall glow pass — subtle green glow bleeding from walls into paths
+  // Ambient wall glow pass — subtle glow bleeding from walls into paths (level-tinted)
+  // Extract rgb from neonGlow for wall ambient (reuse palette neon with lower alpha)
+  const neonRaw = palette.neonGlow; // e.g. "rgba(136,255,68,0.6)"
+  const neonAmbient = neonRaw.replace(/[\d.]+\)$/, "0.06)");
+  const neonAmbientFade = neonRaw.replace(/[\d.]+\)$/, "0)");
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const cell = maze[row][col];
@@ -1215,10 +1510,59 @@ export function renderFrame(
         cy,
         TILE_SIZE * 1.1,
       );
-      wallGlow.addColorStop(0, "rgba(60,160,20,0.06)");
-      wallGlow.addColorStop(1, "rgba(60,160,20,0)");
+      wallGlow.addColorStop(0, neonAmbient);
+      wallGlow.addColorStop(1, neonAmbientFade);
       ctx.fillStyle = wallGlow;
       ctx.fillRect(x - TILE_SIZE, y - TILE_SIZE, TILE_SIZE * 3, TILE_SIZE * 3);
+    }
+  }
+
+  // Compass safe-path overlay — highlight tiles on the path
+  if (compassActive && compassPath && compassPath.length > 1) {
+    for (let i = 1; i < compassPath.length; i++) {
+      const pt = compassPath[i];
+      const px = pt.col * TILE_SIZE;
+      const py = pt.row * TILE_SIZE;
+      const alpha = 0.18 - (i / compassPath.length) * 0.12;
+      ctx.fillStyle = `rgba(255,220,60,${alpha})`;
+      ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+      // Dotted line segment
+      if (i < compassPath.length - 1) {
+        const next = compassPath[i + 1];
+        const ax = pt.col * TILE_SIZE + TILE_SIZE / 2;
+        const ay = pt.row * TILE_SIZE + TILE_SIZE / 2;
+        const bx = next.col * TILE_SIZE + TILE_SIZE / 2;
+        const by = next.row * TILE_SIZE + TILE_SIZE / 2;
+        const lineAlpha = 0.55 - (i / compassPath.length) * 0.35;
+        ctx.strokeStyle = `rgba(255,200,40,${lineAlpha})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    // Bright destination marker
+    if (compassPath.length > 1) {
+      const dest = compassPath[compassPath.length - 1];
+      const dx = dest.col * TILE_SIZE + TILE_SIZE / 2;
+      const dy = dest.row * TILE_SIZE + TILE_SIZE / 2;
+      const destGlow = ctx.createRadialGradient(
+        dx,
+        dy,
+        0,
+        dx,
+        dy,
+        TILE_SIZE * 0.8,
+      );
+      destGlow.addColorStop(0, "rgba(255,230,80,0.55)");
+      destGlow.addColorStop(1, "rgba(255,180,0,0)");
+      ctx.fillStyle = destGlow;
+      ctx.beginPath();
+      ctx.arc(dx, dy, TILE_SIZE * 0.8, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -1231,7 +1575,7 @@ export function renderFrame(
       const cy = row * TILE_SIZE + TILE_SIZE / 2;
       ctx.beginPath();
       ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,220,80,0.5)";
+      ctx.fillStyle = palette.dotColor;
       ctx.fill();
     }
   }
@@ -1242,6 +1586,20 @@ export function renderFrame(
       const x = col * TILE_SIZE;
       const y = row * TILE_SIZE;
       const cell = maze[row][col];
+
+      const isRareTile =
+        cell === TILE.NETHER_STAR ||
+        cell === TILE.DIAMOND_SWORD ||
+        cell === TILE.COMPASS;
+
+      // Draw rare item glow underneath the tile sprite
+      if (
+        isRareTile &&
+        rareItemTimeLeft !== undefined &&
+        rareItemTimeLeft > 0
+      ) {
+        drawRareItemGlow(ctx, x, y, frameTime, rareItemTimeLeft);
+      }
 
       if (cell === TILE.STEAK) {
         drawSteak(ctx, x, y);
@@ -1259,6 +1617,12 @@ export function renderFrame(
         drawFreezeTile(ctx, x, y, frameTime);
       } else if (cell === TILE.SPEED_BOOST) {
         drawSpeedBoostTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.NETHER_STAR) {
+        drawNetherStarTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.DIAMOND_SWORD) {
+        drawDiamondSwordTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.COMPASS) {
+        drawCompassTile(ctx, x, y, frameTime);
       }
     }
   }
@@ -1368,6 +1732,60 @@ export function renderFrame(
     ctx.restore();
   }
 
+  // Nether Star timer bar — purple, bottom (stacked)
+  if (
+    netherStarActive &&
+    netherStarTimeLeft !== undefined &&
+    netherStarTimeLeft > 0
+  ) {
+    const fraction = netherStarTimeLeft / NETHER_STAR_DURATION;
+    const W = COLS * TILE_SIZE;
+    const stackOffset =
+      (ghostModeActive ? 9 : 0) +
+      (freezeActive ? 9 : 0) +
+      (speedBoostActive ? 9 : 0);
+    const barY = ROWS * TILE_SIZE - 5 - stackOffset;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, barY, W, 4);
+    const starBarGrad = ctx.createLinearGradient(0, 0, W, 0);
+    starBarGrad.addColorStop(0, "#ee88ff");
+    starBarGrad.addColorStop(1, "#9922ee");
+    ctx.fillStyle = starBarGrad;
+    ctx.fillRect(0, barY, W * fraction, 4);
+    ctx.save();
+    ctx.font = `bold ${TILE_SIZE * 0.55}px 'Outfit', sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(220,140,255,0.9)";
+    ctx.fillText("🟣 INVINCIBLE", 4, barY - 2);
+    ctx.restore();
+  }
+
+  // Compass timer bar — amber, bottom (stacked)
+  if (compassActive && compassPath !== undefined && compassPath.length > 0) {
+    const W = COLS * TILE_SIZE;
+    const stackOffset =
+      (ghostModeActive ? 9 : 0) +
+      (freezeActive ? 9 : 0) +
+      (speedBoostActive ? 9 : 0) +
+      (netherStarActive ? 9 : 0);
+    const barY = ROWS * TILE_SIZE - 5 - stackOffset;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, barY, W, 4);
+    const compassBarGrad = ctx.createLinearGradient(0, 0, W, 0);
+    compassBarGrad.addColorStop(0, "#ffe060");
+    compassBarGrad.addColorStop(1, "#ff8800");
+    ctx.fillStyle = compassBarGrad;
+    const compassFraction =
+      compassTimeLeft !== undefined ? compassTimeLeft / COMPASS_DURATION : 0.5;
+    ctx.fillRect(0, barY, W * compassFraction, 4);
+    ctx.save();
+    ctx.font = `bold ${TILE_SIZE * 0.55}px 'Outfit', sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,210,80,0.9)";
+    ctx.fillText("🧭 COMPASS", 4, barY - 2);
+    ctx.restore();
+  }
+
   // Draw enemies
   for (const enemy of enemies) {
     if (!enemy.visible) continue;
@@ -1444,6 +1862,28 @@ export function renderFrame(
     ctx.beginPath();
     ctx.arc(px, py, TILE_SIZE * 1.2, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Nether Star — pulsing purple invincibility aura around player
+  if (netherStarActive) {
+    const px = player.col * TILE_SIZE + TILE_SIZE / 2;
+    const py = player.row * TILE_SIZE + TILE_SIZE / 2;
+    const starPulse = 0.5 + 0.35 * Math.abs(Math.sin(frameTime * 0.008));
+    const starGlowR = TILE_SIZE * 1.4;
+    const starGlow = ctx.createRadialGradient(px, py, 0, px, py, starGlowR);
+    starGlow.addColorStop(0, `rgba(220,120,255,${starPulse})`);
+    starGlow.addColorStop(0.5, `rgba(160,60,255,${starPulse * 0.4})`);
+    starGlow.addColorStop(1, "rgba(160,60,255,0)");
+    ctx.fillStyle = starGlow;
+    ctx.beginPath();
+    ctx.arc(px, py, starGlowR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Diamond Sword flash — bright cyan/white burst across screen
+  if (diamondSwordFlash) {
+    ctx.fillStyle = "rgba(100,240,255,0.45)";
+    ctx.fillRect(0, 0, COLS * TILE_SIZE, ROWS * TILE_SIZE);
   }
 
   // Freeze overlay — icy blue screen tint

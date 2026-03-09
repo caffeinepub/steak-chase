@@ -6,6 +6,7 @@ import {
   BOSS_LEVELS,
   BOSS_ROW,
   COLS,
+  COMPASS_DURATION,
   type Direction,
   ENEMY_STARTS,
   EXPLOSION_RADIUS,
@@ -14,11 +15,14 @@ import {
   GHOST_MODE_DURATION,
   INITIAL_MAZE,
   MAX_LEVELS,
+  NETHER_STAR_DURATION,
   PLAYER_SPEED,
   PLAYER_START,
   PORTAL_PAIRS,
   POWER_UP_DURATION,
   POWER_UP_ENEMY_SPEED_MULTIPLIER,
+  RARE_ITEM_LIFESPAN,
+  RARE_TILES,
   ROWS,
   SCORE,
   SKELETON_SPEED,
@@ -30,9 +34,11 @@ import {
 } from "./constants";
 import {
   bfsNextStep,
+  bfsSafePath,
   randomAdjacentStep,
   straightLineStep,
 } from "./pathfinding";
+import type { Point } from "./pathfinding";
 import { type RenderEnemy, preloadImages, renderFrame } from "./renderer";
 
 export interface GameEnemy {
@@ -85,13 +91,36 @@ export interface GameState {
   // Speed boost — faster movement
   speedBoostActive: boolean;
   speedBoostEndTime: number;
+  // Nether Star — invincible (enemies can't kill player)
+  netherStarActive: boolean;
+  netherStarEndTime: number;
+  // Diamond Sword — used (one-shot clear, no timer needed)
+  diamondSwordFlashUntil: number;
+  // Compass — safe path overlay
+  compassActive: boolean;
+  compassEndTime: number;
+  compassPath: Point[];
+  compassUpdateTimer: number; // refresh path every N ms
+  // Rare item — expires after 20 seconds
+  rareItemExpireTime: number; // 0 = no rare item active, otherwise timestamp
+  rareItemSpawned: boolean; // flag so UI can show "find it!" once
+  // Session stats
+  statsEnemiesDefeated: number;
+  statsRareItemsCollected: number;
+  statsBossesDefeated: number;
+}
+
+export interface SessionStats {
+  enemiesDefeated: number;
+  rareItemsCollected: number;
+  bossesDefeated: number;
 }
 
 export interface GameCallbacks {
   onScoreChange: (score: number) => void;
   onLivesChange: (lives: number) => void;
   onLevelChange: (level: number) => void;
-  onGameOver: (score: number) => void;
+  onGameOver: (score: number, stats: SessionStats) => void;
   onPowerUpChange: (active: boolean) => void;
   onCollect?: (
     type:
@@ -102,7 +131,10 @@ export interface GameCallbacks {
       | "portal"
       | "ghostMode"
       | "freeze"
-      | "speedBoost",
+      | "speedBoost"
+      | "netherStar"
+      | "diamondSword"
+      | "compass",
   ) => void;
   onPowerUp?: () => void;
   onEnemyEat?: () => void;
@@ -110,8 +142,9 @@ export interface GameCallbacks {
   onLevelComplete?: () => void;
   onBossDefeated?: () => void;
   onBossKilled?: () => void;
-  onGameWon?: (score: number) => void;
+  onGameWon?: (score: number, stats: SessionStats) => void;
   onBossPhaseChange?: (active: boolean) => void;
+  onRareItemSpawned?: () => void;
 }
 
 function cloneMaze(maze: number[][]): number[][] {
@@ -151,6 +184,29 @@ export function useGameEngine(
 
   const initState = useCallback((level: number): GameState => {
     const maze = cloneMaze(INITIAL_MAZE);
+
+    // Rare items: collect all positions that have a rare tile, then strip them
+    // all out and place exactly ONE randomly chosen rare item back.
+    const rarePositions: Array<{ row: number; col: number }> = [];
+    for (let r = 0; r < maze.length; r++) {
+      for (let c = 0; c < maze[r].length; c++) {
+        if ((RARE_TILES as readonly number[]).includes(maze[r][c])) {
+          rarePositions.push({ row: r, col: c });
+          maze[r][c] = TILE.PATH; // clear all rare slots first
+        }
+      }
+    }
+    let hasRareItem = false;
+    if (rarePositions.length > 0) {
+      // Pick one random position and one random rare tile type
+      const pos =
+        rarePositions[Math.floor(Math.random() * rarePositions.length)];
+      const tileType =
+        RARE_TILES[Math.floor(Math.random() * RARE_TILES.length)];
+      maze[pos.row][pos.col] = tileType;
+      hasRareItem = true;
+    }
+
     const total = countCollectibles(maze);
     // Random initial directions for skeletons
     const initDirs = [
@@ -202,6 +258,18 @@ export function useGameEngine(
       freezeEndTime: 0,
       speedBoostActive: false,
       speedBoostEndTime: 0,
+      netherStarActive: false,
+      netherStarEndTime: 0,
+      diamondSwordFlashUntil: 0,
+      compassActive: false,
+      compassEndTime: 0,
+      compassPath: [],
+      compassUpdateTimer: 0,
+      rareItemExpireTime: hasRareItem ? 0 : 0, // set after start via callback
+      rareItemSpawned: hasRareItem,
+      statsEnemiesDefeated: stateRef.current?.statsEnemiesDefeated ?? 0,
+      statsRareItemsCollected: stateRef.current?.statsRareItemsCollected ?? 0,
+      statsBossesDefeated: stateRef.current?.statsBossesDefeated ?? 0,
     };
   }, []);
 
@@ -232,6 +300,14 @@ export function useGameEngine(
     state.freezeEndTime = 0;
     state.speedBoostActive = false;
     state.speedBoostEndTime = 0;
+    state.netherStarActive = false;
+    state.netherStarEndTime = 0;
+    state.diamondSwordFlashUntil = 0;
+    state.compassActive = false;
+    state.compassEndTime = 0;
+    state.compassPath = [];
+    state.compassUpdateTimer = 0;
+    // Don't reset rareItemExpireTime here — rare item persists on map
   }, []);
 
   const movePlayer = useCallback((state: GameState, now: number): void => {
@@ -326,6 +402,7 @@ export function useGameEngine(
         }
       }
       state.score += SCORE.EXPLOSION + killed * SCORE.ENEMY_BASE;
+      state.statsEnemiesDefeated += killed;
       state.explosionFlashUntil = now + 400;
       callbacksRef.current?.onScoreChange(state.score);
       callbacksRef.current?.onCollect?.("explosion");
@@ -361,6 +438,37 @@ export function useGameEngine(
       state.speedBoostActive = true;
       state.speedBoostEndTime = now + SPEED_BOOST_DURATION;
       callbacksRef.current?.onCollect?.("speedBoost");
+    } else if (cell === TILE.NETHER_STAR) {
+      maze[player.row][player.col] = TILE.PATH;
+      state.netherStarActive = true;
+      state.netherStarEndTime = now + NETHER_STAR_DURATION;
+      state.statsRareItemsCollected++;
+      callbacksRef.current?.onCollect?.("netherStar");
+    } else if (cell === TILE.DIAMOND_SWORD) {
+      maze[player.row][player.col] = TILE.PATH;
+      state.statsRareItemsCollected++;
+      // Instantly destroy all living enemies
+      let swordKills = 0;
+      for (const e of state.enemies) {
+        if (!e.dead) {
+          e.dead = true;
+          e.respawnTimer = 5000;
+          swordKills++;
+        }
+      }
+      state.statsEnemiesDefeated += swordKills;
+      state.score += state.enemies.length * SCORE.ENEMY_BASE;
+      state.diamondSwordFlashUntil = now + 500;
+      callbacksRef.current?.onScoreChange(state.score);
+      callbacksRef.current?.onCollect?.("diamondSword");
+      callbacksRef.current?.onEnemyEat?.();
+    } else if (cell === TILE.COMPASS) {
+      maze[player.row][player.col] = TILE.PATH;
+      state.compassActive = true;
+      state.compassEndTime = now + COMPASS_DURATION;
+      state.compassUpdateTimer = 0; // trigger immediate path calc
+      state.statsRareItemsCollected++;
+      callbacksRef.current?.onCollect?.("compass");
     }
   }, []);
 
@@ -439,11 +547,14 @@ export function useGameEngine(
       for (const enemy of state.enemies) {
         if (enemy.dead) continue;
         if (enemy.col === state.player.col && enemy.row === state.player.row) {
+          // Nether Star: completely invincible — enemies pass through harmlessly
+          if (state.netherStarActive) continue;
           if (state.powerUpActive && enemy.scared) {
             // Eat enemy
             const reward = SCORE.ENEMY_BASE * 2 ** state.enemyEatChain;
             state.score += reward;
             state.enemyEatChain++;
+            state.statsEnemiesDefeated++;
             callbacksRef.current?.onScoreChange(state.score);
             callbacksRef.current?.onEnemyEat?.();
             enemy.dead = true;
@@ -455,7 +566,11 @@ export function useGameEngine(
             callbacksRef.current?.onLifeLost?.();
             if (state.lives <= 0) {
               state.gameOver = true;
-              callbacksRef.current?.onGameOver(state.score);
+              callbacksRef.current?.onGameOver(state.score, {
+                enemiesDefeated: state.statsEnemiesDefeated,
+                rareItemsCollected: state.statsRareItemsCollected,
+                bossesDefeated: state.statsBossesDefeated,
+              });
             } else {
               resetPositions(state);
             }
@@ -514,6 +629,25 @@ export function useGameEngine(
 
       const now = timestamp;
 
+      // Rare item spawn timer: set expiry on first frame it's seen
+      if (state.rareItemSpawned && state.rareItemExpireTime === 0) {
+        state.rareItemExpireTime = now + RARE_ITEM_LIFESPAN;
+        callbacksRef.current?.onRareItemSpawned?.();
+        state.rareItemSpawned = false;
+      }
+      // Rare item expiry: remove it from the maze
+      if (state.rareItemExpireTime > 0 && now > state.rareItemExpireTime) {
+        state.rareItemExpireTime = 0;
+        // Remove any remaining rare tile from the maze
+        for (let r = 0; r < state.maze.length; r++) {
+          for (let c = 0; c < state.maze[r].length; c++) {
+            if ((RARE_TILES as readonly number[]).includes(state.maze[r][c])) {
+              state.maze[r][c] = TILE.PATH;
+            }
+          }
+        }
+      }
+
       // Check power-up expiry
       if (state.powerUpActive && now > state.powerUpEndTime) {
         state.powerUpActive = false;
@@ -531,13 +665,38 @@ export function useGameEngine(
       if (state.speedBoostActive && now > state.speedBoostEndTime) {
         state.speedBoostActive = false;
       }
+      if (state.netherStarActive && now > state.netherStarEndTime) {
+        state.netherStarActive = false;
+      }
+      if (state.compassActive && now > state.compassEndTime) {
+        state.compassActive = false;
+        state.compassPath = [];
+      }
+      // Refresh compass path every 300ms (stay ahead of player movement)
+      if (state.compassActive && now > state.compassUpdateTimer) {
+        state.compassUpdateTimer = now + 300;
+        const enemyPositions = state.enemies
+          .filter((e) => !e.dead)
+          .map((e) => ({ col: e.col, row: e.row }));
+        state.compassPath = bfsSafePath(
+          state.maze,
+          state.player,
+          enemyPositions,
+          ROWS,
+          COLS,
+        );
+      }
 
       // Handle level complete transition
       if (state.levelComplete) {
         if (state.level >= MAX_LEVELS) {
           // All 10 levels complete — game won!
           state.gameWon = true;
-          callbacksRef.current?.onGameWon?.(state.score);
+          callbacksRef.current?.onGameWon?.(state.score, {
+            enemiesDefeated: state.statsEnemiesDefeated,
+            rareItemsCollected: state.statsRareItemsCollected,
+            bossesDefeated: state.statsBossesDefeated,
+          });
           return; // stop the loop
         }
         const newLevel = state.level + 1;
@@ -569,9 +728,18 @@ export function useGameEngine(
           // Full restart after a short delay to let the overlay show
           setTimeout(() => {
             levelRef.current = 1;
+            // Clear persisted stats before full restart
+            if (stateRef.current) {
+              stateRef.current.statsEnemiesDefeated = 0;
+              stateRef.current.statsRareItemsCollected = 0;
+              stateRef.current.statsBossesDefeated = 0;
+            }
             const restartState = initState(1);
             restartState.score = 0;
             restartState.lives = 3;
+            restartState.statsEnemiesDefeated = 0;
+            restartState.statsRareItemsCollected = 0;
+            restartState.statsBossesDefeated = 0;
             stateRef.current = restartState;
             callbacksRef.current?.onScoreChange(0);
             callbacksRef.current?.onLivesChange(3);
@@ -582,13 +750,18 @@ export function useGameEngine(
           state.bossDefeated = true;
           state.bossPhase = false;
           state.score += state.level * 500;
+          state.statsBossesDefeated++;
           callbacksRef.current?.onScoreChange(state.score);
           callbacksRef.current?.onBossPhaseChange?.(false);
           callbacksRef.current?.onBossDefeated?.();
           if (state.level >= MAX_LEVELS) {
             // Last level boss defeated — win the game
             state.gameWon = true;
-            callbacksRef.current?.onGameWon?.(state.score);
+            callbacksRef.current?.onGameWon?.(state.score, {
+              enemiesDefeated: state.statsEnemiesDefeated,
+              rareItemsCollected: state.statsRareItemsCollected,
+              bossesDefeated: state.statsBossesDefeated,
+            });
           } else {
             callbacksRef.current?.onLevelComplete?.();
             state.levelComplete = true;
@@ -608,6 +781,7 @@ export function useGameEngine(
               powerUpActive: false,
               powerUpTimeLeft: 0,
               totalPowerUpDuration: POWER_UP_DURATION,
+              level: state.level,
               explosionFlash: false,
               bossPhase: true,
               bossLevel: state.level,
@@ -623,6 +797,20 @@ export function useGameEngine(
               speedBoostTimeLeft: state.speedBoostActive
                 ? Math.max(0, state.speedBoostEndTime - now)
                 : 0,
+              netherStarActive: state.netherStarActive,
+              netherStarTimeLeft: state.netherStarActive
+                ? Math.max(0, state.netherStarEndTime - now)
+                : 0,
+              diamondSwordFlash: now < state.diamondSwordFlashUntil,
+              compassActive: state.compassActive,
+              compassPath: state.compassActive ? state.compassPath : [],
+              compassTimeLeft: state.compassActive
+                ? Math.max(0, state.compassEndTime - now)
+                : 0,
+              rareItemTimeLeft:
+                state.rareItemExpireTime > 0
+                  ? Math.max(0, state.rareItemExpireTime - now)
+                  : 0,
             },
             now - startTimeRef.current,
           );
@@ -657,6 +845,7 @@ export function useGameEngine(
                 ? Math.max(0, state.powerUpEndTime - now)
                 : 0,
               totalPowerUpDuration: POWER_UP_DURATION,
+              level: state.level,
               explosionFlash: now < state.explosionFlashUntil,
               bossPhase: false,
               bossTimeLeft: 0,
@@ -673,6 +862,20 @@ export function useGameEngine(
               speedBoostTimeLeft: state.speedBoostActive
                 ? Math.max(0, state.speedBoostEndTime - now)
                 : 0,
+              netherStarActive: state.netherStarActive,
+              netherStarTimeLeft: state.netherStarActive
+                ? Math.max(0, state.netherStarEndTime - now)
+                : 0,
+              diamondSwordFlash: now < state.diamondSwordFlashUntil,
+              compassActive: state.compassActive,
+              compassPath: state.compassActive ? state.compassPath : [],
+              compassTimeLeft: state.compassActive
+                ? Math.max(0, state.compassEndTime - now)
+                : 0,
+              rareItemTimeLeft:
+                state.rareItemExpireTime > 0
+                  ? Math.max(0, state.rareItemExpireTime - now)
+                  : 0,
             },
             now - startTimeRef.current,
           );

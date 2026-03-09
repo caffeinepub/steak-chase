@@ -76,6 +76,69 @@ export function bfsNextStep(
 }
 
 /**
+ * BFS full path from `from` to nearest collectible tile (STEAK/PORK_CHOP/GOLDEN_APPLE),
+ * avoiding cells occupied by enemies.
+ * Returns array of Points (including from but excluding destination), or empty array.
+ */
+export function bfsSafePath(
+  maze: number[][],
+  from: Point,
+  enemyPositions: Point[],
+  rows: number,
+  cols: number,
+): Point[] {
+  const enemySet = new Set(enemyPositions.map((p) => `${p.col},${p.row}`));
+  const collectibles = new Set([TILE.STEAK, TILE.PORK_CHOP, TILE.GOLDEN_APPLE]);
+
+  const queue: Point[] = [from];
+  const cameFrom = new Map<string, Point | null>();
+  cameFrom.set(`${from.col},${from.row}`, null);
+
+  const dirs: Point[] = [
+    { col: 0, row: -1 },
+    { col: 0, row: 1 },
+    { col: -1, row: 0 },
+    { col: 1, row: 0 },
+  ];
+
+  let goal: Point | null = null;
+
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    if (
+      collectibles.has(maze[cur.row][cur.col] as 2 | 3 | 4) &&
+      !(cur.col === from.col && cur.row === from.row)
+    ) {
+      goal = cur;
+      break;
+    }
+    for (const dir of dirs) {
+      const nc = cur.col + dir.col;
+      const nr = cur.row + dir.row;
+      if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+      if (maze[nr][nc] === TILE.WALL) continue;
+      const nk = `${nc},${nr}`;
+      if (cameFrom.has(nk)) continue;
+      // skip cells right next to an enemy (soft danger avoidance)
+      if (enemySet.has(nk)) continue;
+      cameFrom.set(nk, cur);
+      queue.push({ col: nc, row: nr });
+    }
+  }
+
+  if (!goal) return [];
+
+  // Backtrack to build path
+  const path: Point[] = [];
+  let cur: Point | null = goal;
+  while (cur !== null) {
+    path.unshift(cur);
+    cur = cameFrom.get(`${cur.col},${cur.row}`) ?? null;
+  }
+  return path;
+}
+
+/**
  * Get a random adjacent non-wall cell (for scared/powered-up flee behavior)
  */
 export function randomAdjacentStep(
