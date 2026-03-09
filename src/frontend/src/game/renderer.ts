@@ -46,6 +46,12 @@ export interface RenderState {
   bossPhase?: boolean;
   bossTimeLeft?: number;
   bossTotalTime?: number;
+  ghostModeActive?: boolean;
+  ghostModeTimeLeft?: number;
+  freezeActive?: boolean;
+  freezeTimeLeft?: number;
+  speedBoostActive?: boolean;
+  speedBoostTimeLeft?: number;
 }
 
 // Image cache
@@ -386,6 +392,158 @@ function drawPortalTile(
     ctx.arc(sx, sy, 1, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.restore();
+}
+
+function drawGhostModeTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const pulse = 1 + 0.18 * Math.sin(time * 0.005);
+  const r = 8 * pulse;
+
+  // Ghostly white-blue glow
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r * 2);
+  glow.addColorStop(0, "rgba(200,220,255,0.45)");
+  glow.addColorStop(1, "rgba(180,200,255,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ghost body — rounded top, wavy bottom
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);
+  const ghostR = 7;
+  ctx.beginPath();
+  ctx.arc(0, -2, ghostR, Math.PI, 0); // top dome
+  // Wavy bottom
+  ctx.lineTo(ghostR, ghostR - 1);
+  ctx.quadraticCurveTo(ghostR * 0.65, ghostR + 3, ghostR * 0.33, ghostR - 1);
+  ctx.quadraticCurveTo(0, ghostR + 3, -ghostR * 0.33, ghostR - 1);
+  ctx.quadraticCurveTo(-ghostR * 0.65, ghostR + 3, -ghostR, ghostR - 1);
+  ctx.closePath();
+  const bodyGrad = ctx.createLinearGradient(0, -ghostR, 0, ghostR);
+  bodyGrad.addColorStop(0, "rgba(220,235,255,0.95)");
+  bodyGrad.addColorStop(1, "rgba(150,180,255,0.7)");
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = "rgba(60,80,160,0.9)";
+  ctx.beginPath();
+  ctx.ellipse(-3, -2, 2, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(3, -2, 2, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFreezeTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const spin = time * 0.002;
+
+  // Icy blue glow
+  const glow = ctx.createRadialGradient(cx, cy, 1, cx, cy, TILE_SIZE * 0.9);
+  glow.addColorStop(0, "rgba(100,220,255,0.5)");
+  glow.addColorStop(1, "rgba(60,160,255,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, TILE_SIZE * 0.9, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Snowflake — 6 arms
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(spin);
+  const armLen = 8;
+  ctx.strokeStyle = "rgba(180,240,255,0.9)";
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 6; i++) {
+    ctx.save();
+    ctx.rotate((i * Math.PI) / 3);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -armLen);
+    ctx.stroke();
+    // Side ticks
+    ctx.beginPath();
+    ctx.moveTo(0, -armLen * 0.55);
+    ctx.lineTo(-3, -armLen * 0.75);
+    ctx.moveTo(0, -armLen * 0.55);
+    ctx.lineTo(3, -armLen * 0.75);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Center dot
+  ctx.fillStyle = "rgba(220,250,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSpeedBoostTile(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  time: number,
+): void {
+  const cx = x + TILE_SIZE / 2;
+  const cy = y + TILE_SIZE / 2;
+  const pulse = 1 + 0.15 * Math.abs(Math.sin(time * 0.007));
+
+  // Yellow-electric glow
+  const glow = ctx.createRadialGradient(
+    cx,
+    cy,
+    1,
+    cx,
+    cy,
+    TILE_SIZE * 0.9 * pulse,
+  );
+  glow.addColorStop(0, "rgba(255,240,40,0.55)");
+  glow.addColorStop(0.5, "rgba(255,180,0,0.25)");
+  glow.addColorStop(1, "rgba(255,180,0,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, TILE_SIZE * 0.9 * pulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lightning bolt (⚡ pixel art)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);
+  ctx.beginPath();
+  // Top half angled right, bottom half angled left — classic bolt
+  ctx.moveTo(3, -9);
+  ctx.lineTo(-2, -1);
+  ctx.lineTo(2, -1);
+  ctx.lineTo(-3, 9);
+  ctx.lineTo(4, 0);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  const boltGrad = ctx.createLinearGradient(0, -9, 0, 9);
+  boltGrad.addColorStop(0, "#fff880");
+  boltGrad.addColorStop(0.5, "#ffe000");
+  boltGrad.addColorStop(1, "#ff9900");
+  ctx.fillStyle = boltGrad;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(180,120,0,0.6)";
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -769,6 +927,12 @@ export function renderFrame(
     bossPhase,
     bossTimeLeft,
     bossTotalTime,
+    ghostModeActive,
+    ghostModeTimeLeft,
+    freezeActive,
+    freezeTimeLeft,
+    speedBoostActive,
+    speedBoostTimeLeft,
   } = state;
 
   // Clear — darker, more atmospheric base
@@ -845,6 +1009,12 @@ export function renderFrame(
         drawExplosionTile(ctx, x, y, frameTime);
       } else if (cell === TILE.PORTAL) {
         drawPortalTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.GHOST_MODE) {
+        drawGhostModeTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.FREEZE) {
+        drawFreezeTile(ctx, x, y, frameTime);
+      } else if (cell === TILE.SPEED_BOOST) {
+        drawSpeedBoostTile(ctx, x, y, frameTime);
       }
     }
   }
@@ -884,6 +1054,76 @@ export function renderFrame(
     ctx.fillRect(0, 0, barWidth, 4);
   }
 
+  // Ghost mode timer bar — white-blue, bottom of canvas
+  if (
+    ghostModeActive &&
+    ghostModeTimeLeft !== undefined &&
+    ghostModeTimeLeft > 0
+  ) {
+    const fraction = ghostModeTimeLeft / 5000;
+    const W = COLS * TILE_SIZE;
+    const barY = ROWS * TILE_SIZE - 5;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, barY, W, 4);
+    const ghostBarGrad = ctx.createLinearGradient(0, 0, W, 0);
+    ghostBarGrad.addColorStop(0, "#c0d8ff");
+    ghostBarGrad.addColorStop(1, "#8090ff");
+    ctx.fillStyle = ghostBarGrad;
+    ctx.fillRect(0, barY, W * fraction, 4);
+    // Label
+    ctx.save();
+    ctx.font = `bold ${TILE_SIZE * 0.55}px 'Outfit', sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(200,220,255,0.85)";
+    ctx.fillText("👻 GHOST", 4, barY - 2);
+    ctx.restore();
+  }
+
+  // Freeze timer bar — cyan, bottom
+  if (freezeActive && freezeTimeLeft !== undefined && freezeTimeLeft > 0) {
+    const fraction = freezeTimeLeft / 4000;
+    const W = COLS * TILE_SIZE;
+    const barY = ROWS * TILE_SIZE - (ghostModeActive ? 14 : 5);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, barY, W, 4);
+    const freezeBarGrad = ctx.createLinearGradient(0, 0, W, 0);
+    freezeBarGrad.addColorStop(0, "#80f8ff");
+    freezeBarGrad.addColorStop(1, "#00b0d8");
+    ctx.fillStyle = freezeBarGrad;
+    ctx.fillRect(0, barY, W * fraction, 4);
+    ctx.save();
+    ctx.font = `bold ${TILE_SIZE * 0.55}px 'Outfit', sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(120,240,255,0.85)";
+    ctx.fillText("🧊 FREEZE", 4, barY - 2);
+    ctx.restore();
+  }
+
+  // Speed boost timer bar — yellow, bottom
+  if (
+    speedBoostActive &&
+    speedBoostTimeLeft !== undefined &&
+    speedBoostTimeLeft > 0
+  ) {
+    const fraction = speedBoostTimeLeft / 5000;
+    const W = COLS * TILE_SIZE;
+    const stackOffset = (ghostModeActive ? 9 : 0) + (freezeActive ? 9 : 0);
+    const barY = ROWS * TILE_SIZE - 5 - stackOffset;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, barY, W, 4);
+    const speedBarGrad = ctx.createLinearGradient(0, 0, W, 0);
+    speedBarGrad.addColorStop(0, "#fff060");
+    speedBarGrad.addColorStop(1, "#ff9900");
+    ctx.fillStyle = speedBarGrad;
+    ctx.fillRect(0, barY, W * fraction, 4);
+    ctx.save();
+    ctx.font = `bold ${TILE_SIZE * 0.55}px 'Outfit', sans-serif`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255,240,80,0.85)";
+    ctx.fillText("⚡ SPEED", 4, barY - 2);
+    ctx.restore();
+  }
+
   // Draw enemies
   for (const enemy of enemies) {
     if (!enemy.visible) continue;
@@ -909,7 +1149,11 @@ export function renderFrame(
     drawBossSkeleton(ctx, frameTime);
   }
 
-  // Draw player
+  // Draw player (with ghost overlay if active)
+  if (ghostModeActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.55 + 0.15 * Math.sin(frameTime * 0.012);
+  }
   drawPlayer(
     ctx,
     player.col * TILE_SIZE,
@@ -917,6 +1161,46 @@ export function renderFrame(
     playerDirection,
     frameTime,
   );
+  if (ghostModeActive) {
+    ctx.restore();
+    // Extra ghost glow around player tile
+    const px = player.col * TILE_SIZE + TILE_SIZE / 2;
+    const py = player.row * TILE_SIZE + TILE_SIZE / 2;
+    const glowR = TILE_SIZE * 1.1;
+    const ghostGlow = ctx.createRadialGradient(px, py, 0, px, py, glowR);
+    ghostGlow.addColorStop(0, "rgba(180,200,255,0.35)");
+    ghostGlow.addColorStop(1, "rgba(180,200,255,0)");
+    ctx.fillStyle = ghostGlow;
+    ctx.beginPath();
+    ctx.arc(px, py, glowR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Speed boost motion trail
+  if (speedBoostActive) {
+    const px = player.col * TILE_SIZE + TILE_SIZE / 2;
+    const py = player.row * TILE_SIZE + TILE_SIZE / 2;
+    const trailGlow = ctx.createRadialGradient(
+      px,
+      py,
+      0,
+      px,
+      py,
+      TILE_SIZE * 1.2,
+    );
+    trailGlow.addColorStop(0, "rgba(255,230,0,0.25)");
+    trailGlow.addColorStop(1, "rgba(255,150,0,0)");
+    ctx.fillStyle = trailGlow;
+    ctx.beginPath();
+    ctx.arc(px, py, TILE_SIZE * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Freeze overlay — icy blue screen tint
+  if (freezeActive) {
+    ctx.fillStyle = "rgba(60,180,255,0.10)";
+    ctx.fillRect(0, 0, COLS * TILE_SIZE, ROWS * TILE_SIZE);
+  }
 
   // Explosion flash overlay
   if (explosionFlash) {

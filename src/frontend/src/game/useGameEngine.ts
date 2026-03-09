@@ -3,13 +3,17 @@ import {
   BOSS_COL,
   BOSS_DURATION,
   BOSS_KILL_DISTANCE,
+  BOSS_LEVELS,
   BOSS_ROW,
   COLS,
   type Direction,
   ENEMY_STARTS,
   EXPLOSION_RADIUS,
   type EnemyType,
+  FREEZE_DURATION,
+  GHOST_MODE_DURATION,
   INITIAL_MAZE,
+  MAX_LEVELS,
   PLAYER_SPEED,
   PLAYER_START,
   PORTAL_PAIRS,
@@ -18,6 +22,8 @@ import {
   ROWS,
   SCORE,
   SKELETON_SPEED,
+  SPEED_BOOST_DURATION,
+  SPEED_BOOST_MULTIPLIER,
   TILE,
   TILE_SIZE,
   ZOMBIE_SPEED,
@@ -68,6 +74,17 @@ export interface GameState {
   bossPhase: boolean;
   bossStartTime: number;
   bossDefeated: boolean;
+  // Game won (all levels complete)
+  gameWon: boolean;
+  // Ghost mode — walk through walls
+  ghostModeActive: boolean;
+  ghostModeEndTime: number;
+  // Freeze — enemies stop moving
+  freezeActive: boolean;
+  freezeEndTime: number;
+  // Speed boost — faster movement
+  speedBoostActive: boolean;
+  speedBoostEndTime: number;
 }
 
 export interface GameCallbacks {
@@ -77,12 +94,23 @@ export interface GameCallbacks {
   onGameOver: (score: number) => void;
   onPowerUpChange: (active: boolean) => void;
   onCollect?: (
-    type: "steak" | "porkChop" | "goldenApple" | "explosion" | "portal",
+    type:
+      | "steak"
+      | "porkChop"
+      | "goldenApple"
+      | "explosion"
+      | "portal"
+      | "ghostMode"
+      | "freeze"
+      | "speedBoost",
   ) => void;
   onPowerUp?: () => void;
   onEnemyEat?: () => void;
   onLifeLost?: () => void;
   onLevelComplete?: () => void;
+  onBossDefeated?: () => void;
+  onBossKilled?: () => void;
+  onGameWon?: (score: number) => void;
 }
 
 function cloneMaze(maze: number[][]): number[][] {
@@ -166,6 +194,13 @@ export function useGameEngine(
       bossPhase: false,
       bossStartTime: 0,
       bossDefeated: false,
+      gameWon: false,
+      ghostModeActive: false,
+      ghostModeEndTime: 0,
+      freezeActive: false,
+      freezeEndTime: 0,
+      speedBoostActive: false,
+      speedBoostEndTime: 0,
     };
   }, []);
 
@@ -190,10 +225,18 @@ export function useGameEngine(
     state.powerUpActive = false;
     state.powerUpEndTime = 0;
     state.enemyEatChain = 0;
+    state.ghostModeActive = false;
+    state.ghostModeEndTime = 0;
+    state.freezeActive = false;
+    state.freezeEndTime = 0;
+    state.speedBoostActive = false;
+    state.speedBoostEndTime = 0;
   }, []);
 
   const movePlayer = useCallback((state: GameState, now: number): void => {
-    const speedMs = PLAYER_SPEED;
+    const speedMs = state.speedBoostActive
+      ? PLAYER_SPEED * SPEED_BOOST_MULTIPLIER
+      : PLAYER_SPEED;
     if (now - state.lastPlayerMoveTime < speedMs) return;
 
     // Check held keys for direction
@@ -224,7 +267,8 @@ export function useGameEngine(
       const nc = player.col + dc;
       const nr = player.row + dr;
       if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS) return false;
-      if (maze[nr][nc] === TILE.WALL) return false;
+      // Ghost mode: can pass through walls
+      if (!state.ghostModeActive && maze[nr][nc] === TILE.WALL) return false;
       player.col = nc;
       player.row = nr;
       state.currentDirection = dir;
@@ -301,10 +345,28 @@ export function useGameEngine(
           break;
         }
       }
+    } else if (cell === TILE.GHOST_MODE) {
+      maze[player.row][player.col] = TILE.PATH;
+      state.ghostModeActive = true;
+      state.ghostModeEndTime = now + GHOST_MODE_DURATION;
+      callbacksRef.current?.onCollect?.("ghostMode");
+    } else if (cell === TILE.FREEZE) {
+      maze[player.row][player.col] = TILE.PATH;
+      state.freezeActive = true;
+      state.freezeEndTime = now + FREEZE_DURATION;
+      callbacksRef.current?.onCollect?.("freeze");
+    } else if (cell === TILE.SPEED_BOOST) {
+      maze[player.row][player.col] = TILE.PATH;
+      state.speedBoostActive = true;
+      state.speedBoostEndTime = now + SPEED_BOOST_DURATION;
+      callbacksRef.current?.onCollect?.("speedBoost");
     }
   }, []);
 
   const moveEnemies = useCallback((state: GameState, now: number): void => {
+    // Freeze: all enemies stop moving
+    if (state.freezeActive) return;
+
     const speedMultiplier = state.powerUpActive
       ? POWER_UP_ENEMY_SPEED_MULTIPLIER
       : 1;
@@ -422,14 +484,20 @@ export function useGameEngine(
         }
       }
       if (remaining === 0) {
-        // Trigger boss phase instead of immediate level complete
-        state.bossPhase = true;
-        state.bossStartTime = now;
-        state.bossDefeated = false;
-        // Hide normal enemies during boss phase
-        for (const e of state.enemies) {
-          e.dead = true;
-          e.respawnTimer = 999999;
+        if (BOSS_LEVELS.has(state.level)) {
+          // Trigger boss phase for boss levels (1, 3, 5)
+          state.bossPhase = true;
+          state.bossStartTime = now;
+          state.bossDefeated = false;
+          // Hide normal enemies during boss phase
+          for (const e of state.enemies) {
+            e.dead = true;
+            e.respawnTimer = 999999;
+          }
+        } else {
+          // Non-boss level: complete immediately
+          callbacksRef.current?.onLevelComplete?.();
+          state.levelComplete = true;
         }
       }
     },
@@ -452,9 +520,24 @@ export function useGameEngine(
         }
         callbacksRef.current?.onPowerUpChange(false);
       }
+      if (state.ghostModeActive && now > state.ghostModeEndTime) {
+        state.ghostModeActive = false;
+      }
+      if (state.freezeActive && now > state.freezeEndTime) {
+        state.freezeActive = false;
+      }
+      if (state.speedBoostActive && now > state.speedBoostEndTime) {
+        state.speedBoostActive = false;
+      }
 
       // Handle level complete transition
       if (state.levelComplete) {
+        if (state.level >= MAX_LEVELS) {
+          // All 10 levels complete — game won!
+          state.gameWon = true;
+          callbacksRef.current?.onGameWon?.(state.score);
+          return; // stop the loop
+        }
         const newLevel = state.level + 1;
         levelRef.current = newLevel;
         const savedScore = state.score;
@@ -477,25 +560,35 @@ export function useGameEngine(
           Math.abs(state.player.col - BOSS_COL) +
           Math.abs(state.player.row - BOSS_ROW);
         if (dist <= BOSS_KILL_DISTANCE) {
-          // Boss kills player — restart from level 1, reset lives and score
+          // Boss kills player — notify UI first, then restart
           callbacksRef.current?.onLifeLost?.();
-          // Full restart
-          levelRef.current = 1;
-          const restartState = initState(1);
-          restartState.score = 0;
-          restartState.lives = 3;
-          stateRef.current = restartState;
-          callbacksRef.current?.onScoreChange(0);
-          callbacksRef.current?.onLivesChange(3);
-          callbacksRef.current?.onLevelChange(1);
+          callbacksRef.current?.onBossKilled?.();
+          // Full restart after a short delay to let the overlay show
+          setTimeout(() => {
+            levelRef.current = 1;
+            const restartState = initState(1);
+            restartState.score = 0;
+            restartState.lives = 3;
+            stateRef.current = restartState;
+            callbacksRef.current?.onScoreChange(0);
+            callbacksRef.current?.onLivesChange(3);
+            callbacksRef.current?.onLevelChange(1);
+          }, 2500);
         } else if (bossTimeLeft <= 0) {
-          // Survived! Level complete
+          // Survived the boss!
           state.bossDefeated = true;
           state.bossPhase = false;
           state.score += state.level * 500;
           callbacksRef.current?.onScoreChange(state.score);
-          callbacksRef.current?.onLevelComplete?.();
-          state.levelComplete = true;
+          callbacksRef.current?.onBossDefeated?.();
+          if (state.level >= MAX_LEVELS) {
+            // Last level boss defeated — win the game
+            state.gameWon = true;
+            callbacksRef.current?.onGameWon?.(state.score);
+          } else {
+            callbacksRef.current?.onLevelComplete?.();
+            state.levelComplete = true;
+          }
         }
 
         // Render with boss
@@ -515,6 +608,16 @@ export function useGameEngine(
               bossPhase: true,
               bossTimeLeft,
               bossTotalTime: BOSS_DURATION,
+              ghostModeActive: state.ghostModeActive,
+              ghostModeTimeLeft: state.ghostModeActive
+                ? Math.max(0, state.ghostModeEndTime - now)
+                : 0,
+              freezeActive: false,
+              freezeTimeLeft: 0,
+              speedBoostActive: state.speedBoostActive,
+              speedBoostTimeLeft: state.speedBoostActive
+                ? Math.max(0, state.speedBoostEndTime - now)
+                : 0,
             },
             now - startTimeRef.current,
           );
@@ -534,7 +637,7 @@ export function useGameEngine(
             col: e.col,
             row: e.row,
             type: e.type,
-            scared: e.scared,
+            scared: e.scared || state.freezeActive,
             visible: !e.dead,
           }));
           renderFrame(
@@ -553,6 +656,18 @@ export function useGameEngine(
               bossPhase: false,
               bossTimeLeft: 0,
               bossTotalTime: BOSS_DURATION,
+              ghostModeActive: state.ghostModeActive,
+              ghostModeTimeLeft: state.ghostModeActive
+                ? Math.max(0, state.ghostModeEndTime - now)
+                : 0,
+              freezeActive: state.freezeActive,
+              freezeTimeLeft: state.freezeActive
+                ? Math.max(0, state.freezeEndTime - now)
+                : 0,
+              speedBoostActive: state.speedBoostActive,
+              speedBoostTimeLeft: state.speedBoostActive
+                ? Math.max(0, state.speedBoostEndTime - now)
+                : 0,
             },
             now - startTimeRef.current,
           );

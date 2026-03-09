@@ -10,6 +10,8 @@ interface SoundManager {
   playLifeLost: () => void;
   playGameOver: () => void;
   playLevelComplete: () => void;
+  playBossSurvived: () => void;
+  playBossDied: () => void;
 }
 
 function getAudioContext(): AudioContext | null {
@@ -130,6 +132,38 @@ export function useSoundManager(muted: boolean): SoundManager {
       });
     });
 
+  const playBossSurvived = () =>
+    play((ctx) => {
+      const now = ctx.currentTime;
+      // Triumphant ascending fanfare — big and dramatic
+      [523, 659, 784, 1047, 1319].forEach((freq, i) => {
+        playTone(ctx, freq, now + i * 0.12, 0.18, "square", 0.28);
+      });
+      // Final flourish chord
+      playTone(ctx, 1047, now + 0.7, 0.5, "triangle", 0.22);
+      playTone(ctx, 1319, now + 0.72, 0.5, "triangle", 0.18);
+    });
+
+  const playBossDied = () =>
+    play((ctx) => {
+      const now = ctx.currentTime;
+      // Dramatic descending death knell
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.type = "sawtooth";
+      osc1.frequency.setValueAtTime(330, now);
+      osc1.frequency.linearRampToValueAtTime(110, now + 0.6);
+      gain1.gain.setValueAtTime(0.35, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc1.start(now);
+      osc1.stop(now + 0.7);
+      // Low rumble
+      playTone(ctx, 80, now + 0.1, 0.5, "sawtooth", 0.2);
+      playTone(ctx, 60, now + 0.3, 0.6, "sawtooth", 0.22);
+    });
+
   return {
     playCollect,
     playPowerUp,
@@ -137,5 +171,7 @@ export function useSoundManager(muted: boolean): SoundManager {
     playLifeLost,
     playGameOver,
     playLevelComplete,
+    playBossSurvived,
+    playBossDied,
   };
 }

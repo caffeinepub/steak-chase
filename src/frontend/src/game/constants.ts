@@ -12,6 +12,9 @@ export const TILE = {
   PORK_CHOP: 4,
   EXPLOSION: 5,
   PORTAL: 6,
+  GHOST_MODE: 7, // walk through walls briefly
+  FREEZE: 8, // freeze enemies for 4s
+  SPEED_BOOST: 9, // move super fast for 5s
 } as const;
 
 export const SCORE = {
@@ -23,6 +26,10 @@ export const SCORE = {
 } as const;
 
 export const POWER_UP_DURATION = 8000; // ms
+export const GHOST_MODE_DURATION = 5000; // ms
+export const FREEZE_DURATION = 4000; // ms
+export const SPEED_BOOST_DURATION = 5000; // ms
+export const SPEED_BOOST_MULTIPLIER = 0.35; // fraction of normal PLAYER_SPEED (faster)
 export const PLAYER_SPEED = 200; // ms per tile
 export const ZOMBIE_SPEED = 420; // ms per tile (base) — slow but tracks player via BFS
 export const SKELETON_SPEED = 180; // ms per tile (base) — fast but straight-line only
@@ -34,6 +41,10 @@ export const BOSS_DURATION = 5000; // ms player must survive
 export const BOSS_COL = 9; // centre column of the maze
 export const BOSS_ROW = 10; // centre row of the maze
 export const BOSS_KILL_DISTANCE = 2; // Manhattan distance at which boss kills player
+
+// Level configuration
+export const MAX_LEVELS = 10;
+export const BOSS_LEVELS = new Set([1, 3, 5]); // levels that end with a boss battle
 
 // Portal tile positions (paired): [A, B] — stepping on A teleports to B and vice versa
 export const PORTAL_PAIRS: Array<
@@ -50,7 +61,7 @@ export const INITIAL_MAZE: number[][] = [
   [1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1],
   [1, 3, 1, 1, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 3, 1],
   [1, 2, 1, 1, 2, 1, 1, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1],
-  [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1],
+  [1, 2, 2, 2, 2, 2, 2, 2, 2, 8, 2, 2, 2, 2, 2, 2, 2, 2, 1],
   [1, 2, 1, 1, 2, 1, 2, 1, 1, 5, 1, 1, 2, 1, 2, 1, 1, 2, 1],
   [1, 6, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 6, 1],
   [1, 1, 1, 1, 2, 1, 1, 1, 0, 1, 0, 1, 1, 1, 2, 1, 1, 1, 1],
@@ -62,9 +73,9 @@ export const INITIAL_MAZE: number[][] = [
   [1, 1, 1, 1, 2, 1, 0, 1, 1, 1, 1, 1, 0, 1, 2, 1, 1, 1, 1],
   [1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1],
   [1, 2, 1, 1, 2, 1, 1, 1, 2, 5, 2, 1, 1, 1, 2, 1, 1, 2, 1],
-  [1, 3, 2, 1, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 3, 1],
+  [1, 3, 2, 1, 9, 2, 2, 2, 2, 0, 2, 2, 2, 2, 9, 1, 2, 3, 1],
   [1, 1, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 1, 1],
-  [1, 2, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 1, 2, 2, 2, 2, 1],
+  [1, 2, 2, 2, 2, 1, 2, 2, 2, 7, 2, 2, 2, 1, 2, 2, 2, 2, 1],
   [1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ];

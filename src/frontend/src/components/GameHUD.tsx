@@ -185,7 +185,7 @@ export function GameHUD({
               letterSpacing: "0.02em",
             }}
           >
-            {level}
+            {level} / 10
           </span>
         </div>
 
