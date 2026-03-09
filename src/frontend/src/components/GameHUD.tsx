@@ -7,8 +7,8 @@ interface GameHUDProps {
   powerUpActive: boolean;
   muted: boolean;
   onToggleMute: () => void;
-  timeLeft: number; // seconds remaining this level
-  lifeLostSignal: number; // increment to trigger life-lost flash+shake
+  timeLeft: number;
+  lifeLostSignal: number;
 }
 
 interface ScoreDelta {
@@ -28,17 +28,12 @@ export function GameHUD({
   timeLeft,
   lifeLostSignal,
 }: GameHUDProps) {
-  // Track previous score to derive delta
   const prevScoreRef = useRef(score);
-  // Key trick: changing the key re-mounts the element, re-triggering CSS animation
   const [popKey, setPopKey] = useState(0);
-  // Floating delta pop-ups
   const [deltas, setDeltas] = useState<ScoreDelta[]>([]);
   const deltaIdRef = useRef(0);
-  // Life-lost shake+flash
   const [lifeLostFlash, setLifeLostFlash] = useState(false);
   const prevLifeLostSignalRef = useRef(lifeLostSignal);
-  // Personal best high score
   const [highScore, setHighScore] = useState<number>(() => {
     try {
       return (
@@ -49,7 +44,6 @@ export function GameHUD({
     }
   });
 
-  // Update high score whenever current score exceeds it
   useEffect(() => {
     if (score > highScore) {
       setHighScore(score);
@@ -61,7 +55,6 @@ export function GameHUD({
     }
   }, [score, highScore]);
 
-  // Life-lost flash + shake
   useEffect(() => {
     if (lifeLostSignal !== prevLifeLostSignalRef.current) {
       prevLifeLostSignalRef.current = lifeLostSignal;
@@ -74,15 +67,10 @@ export function GameHUD({
     if (score !== prevScoreRef.current) {
       const diff = score - prevScoreRef.current;
       prevScoreRef.current = score;
-
-      // Trigger pop animation
       setPopKey((k) => k + 1);
-
-      // Add floating delta
       if (diff > 0) {
         const id = ++deltaIdRef.current;
         setDeltas((prev) => [...prev, { id, value: diff }]);
-        // Remove after animation completes
         setTimeout(() => {
           setDeltas((prev) => prev.filter((d) => d.id !== id));
         }, 900);
@@ -100,62 +88,52 @@ export function GameHUD({
         backdropFilter: "blur(4px)",
         WebkitBackdropFilter: "blur(4px)",
         borderBottom: "1px solid rgba(80,120,40,0.25)",
-        padding: "8px 18px",
-        gap: "12px",
+        padding: "5px 10px",
+        gap: "6px",
+        flexWrap: "nowrap",
+        minWidth: 0,
+        overflow: "hidden",
+        boxSizing: "border-box",
       }}
     >
-      {/* ── SCORE — premium widget ── */}
+      {/* ── SCORE ── */}
       <div
         data-ocid="hud.score"
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-start",
-          gap: "0px",
-          minWidth: "120px",
+          gap: 0,
+          minWidth: 0,
+          flexShrink: 1,
           position: "relative",
         }}
       >
-        {/* Ambient glow backdrop */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: "-6px -10px",
-            background:
-              "radial-gradient(ellipse at 40% 60%, rgba(240,180,30,0.12) 0%, transparent 70%)",
-            borderRadius: "12px",
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* SCORE label */}
         <span
           style={{
             fontFamily: "'Outfit', sans-serif",
-            fontSize: "0.6rem",
+            fontSize: "clamp(0.45rem, 1.5vw, 0.6rem)",
             fontWeight: 800,
-            letterSpacing: "0.2em",
+            letterSpacing: "0.15em",
             textTransform: "uppercase",
             color: "rgba(200,150,30,0.75)",
             lineHeight: 1,
-            marginBottom: "2px",
+            marginBottom: "1px",
+            whiteSpace: "nowrap",
           }}
         >
           ✦ SCORE ✦
         </span>
 
-        {/* Score number + delta wrapper */}
         <div style={{ position: "relative", display: "inline-block" }}>
-          {/* Score number */}
           <span
             key={popKey}
             className={`score-shimmer score-pop${lifeLostFlash ? " score-life-lost" : ""}`}
             style={{
               fontFamily: "'Outfit', sans-serif",
-              fontSize: "1.6rem",
+              fontSize: "clamp(1rem, 4vw, 1.5rem)",
               fontWeight: 900,
-              letterSpacing: "0.03em",
+              letterSpacing: "0.02em",
               lineHeight: 1,
               display: "inline-block",
               position: "relative",
@@ -170,7 +148,6 @@ export function GameHUD({
             {score.toLocaleString()}
           </span>
 
-          {/* Floating delta pop-ups */}
           {deltas.map((delta) => (
             <span
               key={delta.id}
@@ -179,9 +156,9 @@ export function GameHUD({
                 position: "absolute",
                 top: "-4px",
                 left: "100%",
-                marginLeft: "6px",
+                marginLeft: "4px",
                 fontFamily: "'Outfit', sans-serif",
-                fontSize: "0.72rem",
+                fontSize: "0.65rem",
                 fontWeight: 800,
                 color:
                   delta.value >= 50
@@ -205,31 +182,29 @@ export function GameHUD({
           ))}
         </div>
 
-        {/* Thin gold underline accent */}
         <div
           aria-hidden="true"
           style={{
-            height: "2px",
+            height: "1px",
             width: "100%",
-            marginTop: "3px",
+            marginTop: "2px",
             background:
               "linear-gradient(90deg, rgba(240,180,30,0.8) 0%, rgba(255,220,80,0.4) 60%, transparent 100%)",
             borderRadius: "2px",
           }}
         />
 
-        {/* Personal best line */}
         <span
           style={{
             fontFamily: "'Outfit', sans-serif",
-            fontSize: "0.58rem",
+            fontSize: "clamp(0.4rem, 1.2vw, 0.55rem)",
             fontWeight: 600,
             color:
               highScore > 0 && score >= highScore
                 ? "#ff8cff"
                 : "rgba(140,110,20,0.7)",
-            letterSpacing: "0.12em",
-            marginTop: "3px",
+            letterSpacing: "0.1em",
+            marginTop: "2px",
             textShadow:
               highScore > 0 && score >= highScore
                 ? "0 0 8px rgba(255,100,255,0.5)"
@@ -244,36 +219,38 @@ export function GameHUD({
         </span>
       </div>
 
-      {/* Lives */}
+      {/* ── LIVES ── */}
       <div
         data-ocid="hud.lives"
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: "4px",
+          gap: "2px",
+          flexShrink: 0,
         }}
       >
         <span
           style={{
             fontFamily: "'Outfit', sans-serif",
-            fontSize: "0.7rem",
+            fontSize: "clamp(0.45rem, 1.5vw, 0.65rem)",
             fontWeight: 600,
             color: "#6a7a60",
-            letterSpacing: "0.1em",
+            letterSpacing: "0.08em",
+            whiteSpace: "nowrap",
           }}
         >
           LIVES
         </span>
-        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
           {(["life-1", "life-2", "life-3"] as const).map((lifeId, idx) => (
             <div
               key={lifeId}
               style={{
-                width: "24px",
-                height: "24px",
+                width: "clamp(16px, 5vw, 22px)",
+                height: "clamp(16px, 5vw, 22px)",
                 overflow: "hidden",
-                borderRadius: "5px",
+                borderRadius: "4px",
                 opacity: idx < lives ? 1 : 0.18,
                 transition: "opacity 0.25s",
                 border:
@@ -282,6 +259,7 @@ export function GameHUD({
                     : "1px solid rgba(60,60,60,0.3)",
                 background:
                   idx < lives ? "rgba(70,120,30,0.18)" : "transparent",
+                flexShrink: 0,
               }}
             >
               <img
@@ -295,25 +273,26 @@ export function GameHUD({
         </div>
       </div>
 
-      {/* Level Timer */}
+      {/* ── TIME ── */}
       <div
         data-ocid="hud.timer"
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: "2px",
-          minWidth: "52px",
+          gap: "1px",
+          flexShrink: 0,
         }}
       >
         <span
           style={{
             fontFamily: "'Outfit', sans-serif",
-            fontSize: "0.7rem",
+            fontSize: "clamp(0.45rem, 1.5vw, 0.65rem)",
             fontWeight: 600,
             color: "#6a7a60",
-            letterSpacing: "0.1em",
+            letterSpacing: "0.08em",
             textTransform: "uppercase",
+            whiteSpace: "nowrap",
           }}
         >
           TIME
@@ -321,7 +300,7 @@ export function GameHUD({
         <span
           style={{
             fontFamily: "'Outfit', sans-serif",
-            fontSize: "1.05rem",
+            fontSize: "clamp(0.75rem, 3vw, 1rem)",
             fontWeight: 800,
             color:
               timeLeft <= 10
@@ -335,37 +314,40 @@ export function GameHUD({
                 : timeLeft <= 20
                   ? "0 0 10px rgba(255,150,0,0.4)"
                   : "0 0 8px rgba(80,220,220,0.3)",
-            letterSpacing: "0.03em",
+            letterSpacing: "0.02em",
             transition: "color 0.3s",
+            whiteSpace: "nowrap",
           }}
         >
           {timeLeft}s
         </span>
       </div>
 
-      {/* Power-up indicator */}
+      {/* ── POWER-UP indicator (conditional) ── */}
       {powerUpActive && (
         <div
           className="powerup-active"
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "6px",
+            gap: "4px",
             background: "rgba(50,100,220,0.12)",
             border: "1px solid rgba(80,140,255,0.35)",
-            borderRadius: "8px",
-            padding: "5px 12px",
+            borderRadius: "6px",
+            padding: "3px 7px",
             backdropFilter: "blur(4px)",
+            flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: "1rem" }}>🍎</span>
+          <span style={{ fontSize: "0.85rem" }}>🍎</span>
           <span
             style={{
               fontFamily: "'Outfit', sans-serif",
-              fontSize: "0.7rem",
+              fontSize: "clamp(0.45rem, 1.5vw, 0.65rem)",
               fontWeight: 700,
               color: "#80c0ff",
-              letterSpacing: "0.1em",
+              letterSpacing: "0.08em",
+              whiteSpace: "nowrap",
             }}
           >
             POWER!
@@ -373,12 +355,13 @@ export function GameHUD({
         </div>
       )}
 
-      {/* Level + Mute */}
+      {/* ── LEVEL + MUTE ── */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "10px",
+          gap: "6px",
+          flexShrink: 0,
         }}
       >
         <div
@@ -387,17 +370,17 @@ export function GameHUD({
             display: "flex",
             flexDirection: "column",
             alignItems: "flex-end",
-            gap: "2px",
-            minWidth: "52px",
+            gap: "1px",
           }}
         >
           <span
             style={{
               fontFamily: "'Outfit', sans-serif",
-              fontSize: "0.7rem",
+              fontSize: "clamp(0.45rem, 1.5vw, 0.65rem)",
               fontWeight: 600,
               color: "#6a7a60",
-              letterSpacing: "0.1em",
+              letterSpacing: "0.08em",
+              whiteSpace: "nowrap",
             }}
           >
             LEVEL
@@ -405,17 +388,17 @@ export function GameHUD({
           <span
             style={{
               fontFamily: "'Outfit', sans-serif",
-              fontSize: "1.05rem",
+              fontSize: "clamp(0.75rem, 3vw, 1rem)",
               fontWeight: 800,
               color: "#68e068",
               letterSpacing: "0.02em",
+              whiteSpace: "nowrap",
             }}
           >
-            {level} / 10
+            {level}/10
           </span>
         </div>
 
-        {/* Mute toggle */}
         <button
           type="button"
           data-ocid="hud.mute_toggle"
@@ -428,16 +411,17 @@ export function GameHUD({
             border: muted
               ? "1px solid rgba(255,255,255,0.08)"
               : "1px solid rgba(100,180,50,0.3)",
-            borderRadius: "7px",
+            borderRadius: "6px",
             cursor: "pointer",
-            padding: "5px 8px",
-            fontSize: "1rem",
+            padding: "4px 6px",
+            fontSize: "0.85rem",
             lineHeight: 1,
             color: muted ? "#555" : "#aae060",
             transition: "background 0.2s, border-color 0.2s, color 0.2s",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            flexShrink: 0,
           }}
         >
           {muted ? "🔇" : "🔊"}

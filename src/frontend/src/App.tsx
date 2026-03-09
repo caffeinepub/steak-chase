@@ -8,8 +8,32 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [muted, setMuted] = useState(false);
 
+  const isSplash = screen === "splash";
+
   return (
-    <div className="dark" style={{ minHeight: "100vh", background: "#0d1a06" }}>
+    <div
+      className="dark"
+      style={
+        isSplash
+          ? {
+              minHeight: "100dvh",
+              height: "auto",
+              overflowY: "auto",
+              overflowX: "hidden",
+              background: "#0d1a06",
+              display: "flex",
+              flexDirection: "column",
+            }
+          : {
+              height: "100dvh",
+              maxHeight: "100dvh",
+              overflow: "hidden",
+              background: "#0d1a06",
+              display: "flex",
+              flexDirection: "column",
+            }
+      }
+    >
       {screen === "splash" && (
         <SplashScreen
           onPlay={() => setScreen("playing")}

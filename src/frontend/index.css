@@ -72,9 +72,11 @@
     @apply border-border;
   }
 
-  body {
+  html, body {
     @apply bg-background text-foreground;
     font-family: "Outfit", sans-serif;
+    overflow-x: hidden;
+    overflow-y: auto;
     background-color: #0a0c10;
   }
 }

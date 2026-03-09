@@ -32,7 +32,10 @@ export function GameScreen({
   onToggleMute,
 }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Scale factor for the canvas CSS transform
+  const [canvasScale, setCanvasScale] = useState(1);
 
   // React state only for UI overlay
   const [score, setScore] = useState(0);
@@ -75,6 +78,35 @@ export function GameScreen({
   const { startGame, stopGame, handleKeyDown, handleKeyUp } =
     useGameEngine(canvasRef);
 
+  // ── Canvas scale via ResizeObserver ──────────────────────────────────────
+  useEffect(() => {
+    const wrapper = canvasWrapperRef.current;
+    if (!wrapper) return;
+
+    const recalcScale = () => {
+      const { width, height } = wrapper.getBoundingClientRect();
+      if (width === 0) return;
+      // Reserve ~65px for HUD and ~150px for bottom controls
+      const viewportBudget = window.innerHeight - 65 - 150;
+      const effectiveH = Math.min(
+        height > 0 ? height : viewportBudget,
+        viewportBudget,
+      );
+      const scale = Math.min(
+        width / CANVAS_WIDTH,
+        effectiveH / CANVAS_HEIGHT,
+        1, // never scale up
+      );
+      setCanvasScale(scale);
+    };
+
+    const ro = new ResizeObserver(recalcScale);
+    ro.observe(wrapper);
+    recalcScale(); // initial calculation
+
+    return () => ro.disconnect();
+  }, []);
+
   // Start/reset the per-level countdown
   const startLevelTimer = useCallback(() => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -82,8 +114,6 @@ export function GameScreen({
     timerIntervalRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
-          // Time's up — let the game engine handle game-over naturally,
-          // but stop the interval and reset to 0 so UI shows 0
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
           return 0;
         }
@@ -128,7 +158,6 @@ export function GameScreen({
       const absX = Math.abs(deltaX);
       const absY = Math.abs(deltaY);
 
-      // Only register if swipe distance exceeds threshold
       if (absX < SWIPE_THRESHOLD && absY < SWIPE_THRESHOLD) return;
 
       let key: string;
@@ -146,7 +175,7 @@ export function GameScreen({
     [handleKeyDown, handleKeyUp],
   );
 
-  // Start the delay before spin kicks in. Level 1 = 5s delay, all others = 10s.
+  // Start the delay before spin kicks in.
   const startSpinDelay = useCallback((lvl: number) => {
     setSpinReady(false);
     if (spinDelayRef.current) clearTimeout(spinDelayRef.current);
@@ -157,20 +186,15 @@ export function GameScreen({
   }, []);
 
   useEffect(() => {
-    // Start game with sound callbacks — use soundsRef so muted state is
-    // always current without restarting the game loop on every mute toggle
     startGame({
       onScoreChange: setScore,
       onLivesChange: setLives,
       onLevelChange: (lvl) => {
         setLevel(lvl);
-        // Reset slow-spin for the new level
         setSlowSpinUsed(false);
         setSlowSpinActive(false);
         if (slowSpinTimerRef.current) clearTimeout(slowSpinTimerRef.current);
-        // Reset countdown timer for the new level
         startLevelTimer();
-        // Reset spin delay for the new level
         startSpinDelay(lvl);
       },
       onGameOver: (finalSc, stats) => {
@@ -221,12 +245,9 @@ export function GameScreen({
       },
     });
 
-    // Start level countdown from the beginning
     startLevelTimer();
-    // Start spin delay for level 1
     startSpinDelay(1);
 
-    // Keyboard listeners
     window.addEventListener("keydown", handleKeyDown, { passive: false });
     window.addEventListener("keyup", handleKeyUp);
 
@@ -265,21 +286,26 @@ export function GameScreen({
     }, 5000);
   }, [slowSpinUsed, isBossPhase]);
 
-  // Derive animation style for the maze wrapper.
-  // Spin is paused during boss phase, between-level overlays, game over, and win screen.
   const spinPaused =
     isBossPhase || isGameOver || gameWon || bossResult !== null;
-  const mazeAnimation =
-    spinPaused || !spinReady
-      ? "none"
-      : slowSpinActive
-        ? "mazeSpin 100s linear infinite"
-        : "mazeSpin 25s linear infinite";
+
+  // The canvas visually occupies canvasScale * CANVAS dimensions.
+  // We set the spinning wrapper to that exact size so the layout box matches
+  // the visual footprint. The canvas inside is also sized to scaledW x scaledH
+  // (CSS dimensions) while keeping its pixel resolution at CANVAS_WIDTH x CANVAS_HEIGHT.
+  // The spin animation only rotates — no scale() in keyframes — and uses
+  // transformOrigin: "center center" so it spins around its own centre.
+  const scaledW = CANVAS_WIDTH * canvasScale;
+  const scaledH = CANVAS_HEIGHT * canvasScale;
 
   return (
     <>
       <style>{`
       @keyframes mazeSpin {
+        0%   { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes mazeSpin2 {
         0%   { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
@@ -304,33 +330,39 @@ export function GameScreen({
       .score-life-lost {
         animation: scoreShake 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
       }
+      /* Hide hints bar on small screens to save vertical space */
+      @media (max-height: 700px), (max-width: 500px) {
+        .desktop-hints {
+          display: none !important;
+        }
+      }
     `}</style>
+      {/* Root: full viewport, flex column, no scrolling */}
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         style={{
-          minHeight: "100vh",
+          height: "100dvh",
+          maxHeight: "100dvh",
+          width: "100vw",
+          maxWidth: "100vw",
+          overflow: "hidden",
           background: "linear-gradient(180deg, #0d1a06 0%, #1a2f0a 100%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          padding: "12px",
+          boxSizing: "border-box",
         }}
       >
-        {/* Game frame */}
+        {/* HUD — fixed height, never shrinks out of view */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            background: "#1a1a1a",
-            border: "1px solid #3a3a3a",
-            borderRadius: "12px",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.8)",
+            width: "100%",
+            maxWidth: "100%",
+            flexShrink: 0,
             overflow: "hidden",
           }}
         >
-          {/* HUD */}
           <GameHUD
             score={score}
             lives={lives}
@@ -341,15 +373,58 @@ export function GameScreen({
             timeLeft={timeLeft}
             lifeLostSignal={lifeLostSignal}
           />
+        </div>
 
-          {/* Canvas wrapper */}
+        {/* Canvas area — flex:1 so it takes all remaining space */}
+        <div
+          ref={canvasWrapperRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+            maxWidth: "100%",
+            maxHeight: "calc(100dvh - 65px - 150px)",
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            position: "relative",
+          }}
+        >
+          {/*
+           * Spinning wrapper:
+           * - Width/height are set to the SCALED dimensions so the layout box
+           *   matches the visual footprint exactly.
+           * - transformOrigin: "center center" ensures rotation happens around
+           *   the centre of the element, not the top-left corner.
+           * - The spin animation ONLY rotates — no scale() in keyframes.
+           *   Scale is handled by the explicit width/height above.
+           * - When not spinning, transform: "none" (NOT scale()) since the
+           *   wrapper dimensions already account for scaling.
+           */}
           <div
             style={{
               position: "relative",
               lineHeight: 0,
-              animation: mazeAnimation,
+              width: scaledW,
+              height: scaledH,
+              flexShrink: 0,
+              transformOrigin: "center center",
+              animation:
+                spinPaused || !spinReady
+                  ? "none"
+                  : slowSpinActive
+                    ? "mazeSpin2 100s linear infinite"
+                    : "mazeSpin2 25s linear infinite",
+              transform: spinPaused || !spinReady ? "none" : undefined,
             }}
           >
+            {/*
+             * Canvas: CSS width/height match the scaled dimensions so it fills
+             * the wrapper exactly. The width/height HTML attributes remain at
+             * CANVAS_WIDTH x CANVAS_HEIGHT to preserve pixel resolution.
+             * No transform: scale() here — the wrapper handles sizing.
+             */}
             <canvas
               ref={canvasRef}
               width={CANVAS_WIDTH}
@@ -358,294 +433,319 @@ export function GameScreen({
               style={{
                 display: "block",
                 imageRendering: "pixelated",
+                width: scaledW,
+                height: scaledH,
               }}
             />
+          </div>
 
-            {/* Game Over overlay */}
-            {isGameOver && (
+          {/* Game Over overlay — positioned over the canvas area */}
+          {isGameOver && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 60,
+              }}
+            >
               <GameOverScreen
                 score={finalScore}
                 level={level}
                 stats={sessionStats}
                 onReturnToMenu={handleReturnToMenu}
               />
-            )}
+            </div>
+          )}
 
-            {/* Victory overlay — all 10 levels complete */}
-            {gameWon && (
+          {/* Victory overlay — all 10 levels complete */}
+          {gameWon && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(0,15,0,0.90)",
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+                zIndex: 50,
+                gap: "12px",
+                padding: "16px",
+                overflowY: "auto",
+              }}
+            >
               <div
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "rgba(0,15,0,0.90)",
-                  backdropFilter: "blur(6px)",
-                  WebkitBackdropFilter: "blur(6px)",
-                  zIndex: 50,
-                  gap: "16px",
-                  padding: "24px",
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "clamp(1.4rem, 5vw, 3rem)",
+                  fontWeight: 900,
+                  color: "#ffd700",
+                  textShadow:
+                    "0 0 40px rgba(255,215,0,0.8), 0 0 12px rgba(255,215,0,0.5)",
+                  letterSpacing: "0.08em",
+                  textAlign: "center",
+                  animation: "popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275)",
                 }}
               >
-                <div
-                  style={{
-                    fontFamily: "'Outfit', sans-serif",
-                    fontSize: "clamp(1.8rem, 6vw, 3rem)",
-                    fontWeight: 900,
-                    color: "#ffd700",
-                    textShadow:
-                      "0 0 40px rgba(255,215,0,0.8), 0 0 12px rgba(255,215,0,0.5)",
-                    letterSpacing: "0.08em",
-                    textAlign: "center",
-                    animation:
-                      "popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275)",
-                  }}
-                >
-                  🏆 YOU WIN! 🏆
-                </div>
-                <div
-                  style={{
-                    fontFamily: "'Outfit', sans-serif",
-                    fontSize: "clamp(0.9rem, 2.5vw, 1.2rem)",
-                    color: "#adf0ad",
-                    textAlign: "center",
-                    opacity: 0.9,
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  All 10 Levels Complete!
-                </div>
-                <div
-                  style={{
-                    fontFamily: "'Outfit', sans-serif",
-                    fontSize: "clamp(1rem, 3vw, 1.5rem)",
-                    fontWeight: 700,
-                    color: "#68e068",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Final Score: {wonScore.toLocaleString()}
-                </div>
-
-                {/* Session stats */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "12px",
-                    justifyContent: "center",
-                    flexWrap: "wrap",
-                    marginTop: "4px",
-                  }}
-                >
-                  {[
-                    {
-                      icon: "☠️",
-                      label: "Enemies Defeated",
-                      value: sessionStats.enemiesDefeated,
-                    },
-                    {
-                      icon: "⭐",
-                      label: "Rare Items",
-                      value: sessionStats.rareItemsCollected,
-                    },
-                    {
-                      icon: "💀",
-                      label: "Bosses Beaten",
-                      value: sessionStats.bossesDefeated,
-                    },
-                  ].map(({ icon, label, value }) => (
-                    <div
-                      key={label}
-                      style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,215,0,0.2)",
-                        borderRadius: "10px",
-                        padding: "10px 16px",
-                        textAlign: "center",
-                        minWidth: "80px",
-                        backdropFilter: "blur(4px)",
-                      }}
-                    >
-                      <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>
-                        {icon}
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: "'Outfit', sans-serif",
-                          fontSize: "1.3rem",
-                          fontWeight: 900,
-                          color: "#ffd700",
-                          textShadow: "0 0 10px rgba(255,215,0,0.4)",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {value}
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: "'Outfit', sans-serif",
-                          fontSize: "0.58rem",
-                          fontWeight: 600,
-                          color: "#888",
-                          letterSpacing: "0.06em",
-                          marginTop: "4px",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  className="mc-button"
-                  data-ocid="game.win.button"
-                  onClick={handleReturnToMenu}
-                  style={{
-                    marginTop: "12px",
-                    fontSize: "0.85rem",
-                    padding: "10px 24px",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  BACK TO MENU
-                </button>
+                🏆 YOU WIN! 🏆
               </div>
-            )}
-
-            {/* Boss result overlay */}
-            {bossResult && (
               <div
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background:
-                    bossResult === "survived"
-                      ? "rgba(0,20,0,0.82)"
-                      : "rgba(30,0,0,0.85)",
-                  backdropFilter: "blur(4px)",
-                  WebkitBackdropFilter: "blur(4px)",
-                  zIndex: 40,
-                  animation: "fadeIn 0.25s ease",
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "clamp(0.75rem, 2.5vw, 1.2rem)",
+                  color: "#adf0ad",
+                  textAlign: "center",
+                  opacity: 0.9,
+                  letterSpacing: "0.05em",
                 }}
               >
-                {bossResult === "survived" ? (
-                  <>
-                    <div
-                      style={{
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: "clamp(1.6rem, 5vw, 2.6rem)",
-                        fontWeight: 900,
-                        color: "#68e068",
-                        textShadow:
-                          "0 0 32px rgba(100,230,80,0.7), 0 0 8px rgba(100,230,80,0.4)",
-                        letterSpacing: "0.1em",
-                        textAlign: "center",
-                        padding: "0 12px",
-                        animation:
-                          "popIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275)",
-                      }}
-                    >
-                      YOU SURVIVED!
-                    </div>
-                    <div
-                      style={{
-                        marginTop: "12px",
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: "0.85rem",
-                        color: "#adf0ad",
-                        opacity: 0.8,
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      Advancing to the next level...
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: "clamp(1.6rem, 5vw, 2.6rem)",
-                        fontWeight: 900,
-                        color: "#e05030",
-                        textShadow:
-                          "0 0 32px rgba(220,70,40,0.7), 0 0 8px rgba(220,70,40,0.4)",
-                        letterSpacing: "0.1em",
-                        textAlign: "center",
-                        padding: "0 12px",
-                        animation:
-                          "popIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275)",
-                      }}
-                    >
-                      YOU DIED
-                    </div>
-                    <div
-                      style={{
-                        marginTop: "12px",
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: "0.85rem",
-                        color: "#f0a090",
-                        opacity: 0.8,
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      The boss got you. Back to level 1...
-                    </div>
-                  </>
-                )}
+                All 10 Levels Complete!
               </div>
-            )}
-            {/* Rare item spawn notification */}
-            {showRarePopup && (
               <div
                 style={{
-                  position: "absolute",
-                  top: "14%",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  zIndex: 35,
-                  pointerEvents: "none",
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: "clamp(0.9rem, 3vw, 1.5rem)",
+                  fontWeight: 700,
+                  color: "#68e068",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                Final Score: {wonScore.toLocaleString()}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                  marginTop: "4px",
+                }}
+              >
+                {[
+                  {
+                    icon: "☠️",
+                    label: "Enemies Defeated",
+                    value: sessionStats.enemiesDefeated,
+                  },
+                  {
+                    icon: "⭐",
+                    label: "Rare Items",
+                    value: sessionStats.rareItemsCollected,
+                  },
+                  {
+                    icon: "💀",
+                    label: "Bosses Beaten",
+                    value: sessionStats.bossesDefeated,
+                  },
+                ].map(({ icon, label, value }) => (
+                  <div
+                    key={label}
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,215,0,0.2)",
+                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      textAlign: "center",
+                      minWidth: "70px",
+                      backdropFilter: "blur(4px)",
+                    }}
+                  >
+                    <div style={{ fontSize: "1rem", marginBottom: "2px" }}>
+                      {icon}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: "1.1rem",
+                        fontWeight: 900,
+                        color: "#ffd700",
+                        textShadow: "0 0 10px rgba(255,215,0,0.4)",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {value}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: "0.55rem",
+                        fontWeight: 600,
+                        color: "#888",
+                        letterSpacing: "0.06em",
+                        marginTop: "3px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="mc-button"
+                data-ocid="game.win.button"
+                onClick={handleReturnToMenu}
+                style={{
+                  marginTop: "8px",
+                  fontSize: "0.8rem",
+                  padding: "8px 20px",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                BACK TO MENU
+              </button>
+            </div>
+          )}
+
+          {/* Boss result overlay */}
+          {bossResult && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                background:
+                  bossResult === "survived"
+                    ? "rgba(0,20,0,0.82)"
+                    : "rgba(30,0,0,0.85)",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
+                zIndex: 40,
+                animation: "fadeIn 0.25s ease",
+              }}
+            >
+              {bossResult === "survived" ? (
+                <>
+                  <div
+                    style={{
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "clamp(1.4rem, 5vw, 2.6rem)",
+                      fontWeight: 900,
+                      color: "#68e068",
+                      textShadow:
+                        "0 0 32px rgba(100,230,80,0.7), 0 0 8px rgba(100,230,80,0.4)",
+                      letterSpacing: "0.1em",
+                      textAlign: "center",
+                      padding: "0 12px",
+                      animation:
+                        "popIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275)",
+                    }}
+                  >
+                    YOU SURVIVED!
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "0.8rem",
+                      color: "#adf0ad",
+                      opacity: 0.8,
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    Advancing to the next level...
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "clamp(1.4rem, 5vw, 2.6rem)",
+                      fontWeight: 900,
+                      color: "#e05030",
+                      textShadow:
+                        "0 0 32px rgba(220,70,40,0.7), 0 0 8px rgba(220,70,40,0.4)",
+                      letterSpacing: "0.1em",
+                      textAlign: "center",
+                      padding: "0 12px",
+                      animation:
+                        "popIn 0.3s cubic-bezier(0.175,0.885,0.32,1.275)",
+                    }}
+                  >
+                    YOU DIED
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: "0.8rem",
+                      color: "#f0a090",
+                      opacity: 0.8,
+                      letterSpacing: "0.08em",
+                    }}
+                  >
+                    The boss got you. Back to level 1...
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Rare item spawn notification */}
+          {showRarePopup && (
+            <div
+              style={{
+                position: "absolute",
+                top: "12%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 35,
+                pointerEvents: "none",
+                animation:
+                  "rarePopIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  fontWeight: 900,
+                  fontSize: "clamp(0.65rem, 2.5vw, 1rem)",
+                  letterSpacing: "0.06em",
+                  textAlign: "center",
+                  padding: "6px 14px",
+                  borderRadius: "10px",
+                  background: "rgba(10,5,20,0.82)",
+                  border: "1.5px solid rgba(255,200,60,0.7)",
+                  color: "#ffd700",
+                  textShadow:
+                    "0 0 18px rgba(255,200,0,0.9), 0 0 6px rgba(255,120,0,0.6)",
+                  boxShadow:
+                    "0 0 22px rgba(255,180,0,0.35), 0 0 6px rgba(255,80,200,0.2)",
+                  whiteSpace: "nowrap",
                   animation:
-                    "rarePopIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275)",
+                    "rarePulseText 0.7s ease-in-out infinite alternate",
                 }}
               >
-                <div
-                  style={{
-                    fontFamily: "'Outfit', sans-serif",
-                    fontWeight: 900,
-                    fontSize: "clamp(0.75rem, 2.5vw, 1.05rem)",
-                    letterSpacing: "0.06em",
-                    textAlign: "center",
-                    padding: "8px 18px",
-                    borderRadius: "10px",
-                    background: "rgba(10,5,20,0.82)",
-                    border: "1.5px solid rgba(255,200,60,0.7)",
-                    color: "#ffd700",
-                    textShadow:
-                      "0 0 18px rgba(255,200,0,0.9), 0 0 6px rgba(255,120,0,0.6)",
-                    boxShadow:
-                      "0 0 22px rgba(255,180,0,0.35), 0 0 6px rgba(255,80,200,0.2)",
-                    whiteSpace: "nowrap",
-                    animation:
-                      "rarePulseText 0.7s ease-in-out infinite alternate",
-                  }}
-                >
-                  ⭐ Find the rare item before it disappears! ⭐
-                </div>
+                ⭐ Find the rare item before it disappears! ⭐
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Mobile D-pad controls — hidden on desktop pointer devices */}
+        {/* ── Bottom controls section — flex-shrink:0, always visible ── */}
+        <div
+          style={{
+            flexShrink: 0,
+            width: "100%",
+            maxWidth: "100%",
+            overflow: "hidden",
+            background: "rgba(0,0,0,0.5)",
+            borderTop: "1px solid #2a2a2a",
+          }}
+        >
+          {/* Mobile D-pad — hidden on desktop pointer devices */}
           <div className="mobile-only">
             <MobileControls
               onDirection={handleMobileDirection}
@@ -656,9 +756,7 @@ export function GameScreen({
           {/* Slow spin button */}
           <div
             style={{
-              background: "rgba(0,0,0,0.5)",
-              borderTop: "1px solid #2a2a2a",
-              padding: "5px 12px",
+              padding: "3px 12px",
               display: "flex",
               justifyContent: "center",
             }}
@@ -671,9 +769,9 @@ export function GameScreen({
               style={{
                 fontFamily: "'Outfit', sans-serif",
                 fontWeight: 700,
-                fontSize: "0.62rem",
+                fontSize: "0.55rem",
                 letterSpacing: "0.07em",
-                padding: "4px 14px",
+                padding: "2px 10px",
                 borderRadius: "6px",
                 border: "1px solid",
                 cursor: slowSpinUsed || isBossPhase ? "not-allowed" : "pointer",
@@ -703,50 +801,51 @@ export function GameScreen({
             </button>
           </div>
 
-          {/* Control hints bar */}
+          {/* Control hints bar — hidden on mobile/small screens */}
           <div
+            className="desktop-hints"
             style={{
-              background: "rgba(0,0,0,0.5)",
-              borderTop: "1px solid #2a2a2a",
-              padding: "6px 12px",
+              padding: "3px 8px 5px",
               display: "flex",
               justifyContent: "center",
               flexWrap: "wrap",
-              gap: "12px",
+              gap: "5px",
+              overflowX: "auto",
             }}
           >
             {[
-              { key: "WASD / ↑↓←→", desc: "Move" },
-              { key: "🍎", desc: "Power-Up" },
-              { key: "🥩", desc: "10pts" },
-              { key: "🍖", desc: "30pts" },
-              { key: "💣", desc: "Blast enemies" },
-              { key: "🌀", desc: "Teleport" },
-              { key: "👻", desc: "Ghost 5s" },
-              { key: "🧊", desc: "Freeze 4s" },
-              { key: "⚡", desc: "Speed 5s" },
-              { key: "🟣", desc: "Invincible 10s" },
-              { key: "🔷", desc: "Destroy all" },
-              { key: "🧭", desc: "Safe path 8s" },
+              { key: "WASD/↑↓←→", desc: "Move" },
+              { key: "🍎", desc: "Power" },
+              { key: "🥩", desc: "10pt" },
+              { key: "🍖", desc: "30pt" },
+              { key: "💣", desc: "Blast" },
+              { key: "🌀", desc: "Port" },
+              { key: "👻", desc: "Ghost" },
+              { key: "🧊", desc: "Freeze" },
+              { key: "⚡", desc: "Speed" },
+              { key: "🟣", desc: "Invinc" },
+              { key: "🔷", desc: "Destroy" },
+              { key: "🧭", desc: "Path" },
             ].map(({ key, desc }) => (
               <div
                 key={key}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "4px",
+                  gap: "3px",
+                  flexShrink: 0,
                 }}
               >
                 <span
                   style={{
                     fontFamily: "'Outfit', sans-serif",
                     fontWeight: 600,
-                    fontSize: "0.6rem",
+                    fontSize: "0.55rem",
                     color: "#f0c030",
                     background: "rgba(240,192,48,0.08)",
                     border: "1px solid rgba(240,192,48,0.25)",
                     borderRadius: "4px",
-                    padding: "2px 5px",
+                    padding: "1px 4px",
                   }}
                 >
                   {key}
@@ -754,7 +853,7 @@ export function GameScreen({
                 <span
                   style={{
                     fontFamily: "'Outfit', sans-serif",
-                    fontSize: "0.6rem",
+                    fontSize: "0.55rem",
                     color: "#555",
                   }}
                 >
@@ -764,44 +863,6 @@ export function GameScreen({
             ))}
           </div>
         </div>
-
-        {/* Back button */}
-        <button
-          type="button"
-          className="mc-button"
-          onClick={handleReturnToMenu}
-          style={{
-            marginTop: "16px",
-            fontSize: "0.7rem",
-            padding: "8px 18px",
-            letterSpacing: "0.08em",
-            opacity: 0.85,
-          }}
-        >
-          ← MENU
-        </button>
-
-        {/* Footer */}
-        <footer
-          style={{
-            marginTop: "16px",
-            fontFamily: "'Outfit', sans-serif",
-            fontSize: "0.6rem",
-            color: "#444",
-            textAlign: "center",
-            letterSpacing: "0.03em",
-          }}
-        >
-          © {new Date().getFullYear()}. Built with love using{" "}
-          <a
-            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#5a8a2c", textDecoration: "none" }}
-          >
-            caffeine.ai
-          </a>
-        </footer>
       </div>
     </>
   );

@@ -13,7 +13,6 @@ interface DpadButtonProps {
   ocid: string;
   onDirection: (dir: Direction) => void;
   onRelease: (dir: Direction) => void;
-  style?: React.CSSProperties;
 }
 
 function DpadButton({
@@ -22,7 +21,6 @@ function DpadButton({
   ocid,
   onDirection,
   onRelease,
-  style,
 }: DpadButtonProps) {
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -59,18 +57,17 @@ function DpadButton({
       onContextMenu={(e) => e.preventDefault()}
       aria-label={`Move ${dir}`}
       style={{
-        width: 64,
-        height: 64,
+        width: "100%",
+        height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: "1.5rem",
+        fontSize: "clamp(0.85rem, 4vw, 1.1rem)",
         lineHeight: 1,
         cursor: "pointer",
         userSelect: "none",
         WebkitUserSelect: "none",
         touchAction: "none",
-        /* Minecraft stone-block style */
         background:
           "linear-gradient(135deg, #6b6b6b 0%, #4a4a4a 40%, #333 100%)",
         border: "3px solid",
@@ -79,10 +76,8 @@ function DpadButton({
           "inset 1px 1px 0 #aaa, inset -1px -1px 0 #1a1a1a, 2px 2px 0 #000",
         color: "#f0c030",
         fontFamily: "'Press Start 2P', monospace",
-        position: "relative",
         transition: "filter 0.05s",
         borderRadius: 2,
-        ...style,
       }}
       onPointerEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.filter =
@@ -101,19 +96,20 @@ export function MobileControls({
   onDirection,
   onRelease,
 }: MobileControlsProps) {
+  // 20% smaller than original 52px/13vw
+  const btnSize = "min(42px, 10.5vw)";
+
   return (
     <div
       aria-label="Directional controls"
       style={{
         display: "grid",
-        gridTemplateColumns: "64px 64px 64px",
-        gridTemplateRows: "64px 64px 64px",
-        gap: 4,
-        padding: "12px 0 8px",
+        gridTemplateColumns: `${btnSize} ${btnSize} ${btnSize}`,
+        gridTemplateRows: `${btnSize} ${btnSize} ${btnSize}`,
+        gap: 2,
+        padding: "4px 0 3px",
         justifyContent: "center",
-        /* Mossy-green center piece */
-        background: "rgba(0,0,0,0.5)",
-        borderTop: "2px solid #3a3a3a",
+        background: "transparent",
         touchAction: "none",
       }}
     >
@@ -144,8 +140,6 @@ export function MobileControls({
         style={{
           gridColumn: 2,
           gridRow: 2,
-          width: 64,
-          height: 64,
           background:
             "linear-gradient(135deg, #3a5a1e 0%, #2a4a14 50%, #1e3a0e 100%)",
           border: "3px solid",
@@ -156,7 +150,7 @@ export function MobileControls({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: "1.2rem",
+          fontSize: "clamp(0.75rem, 3.5vw, 1rem)",
         }}
       >
         🐺
