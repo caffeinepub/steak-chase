@@ -44,6 +44,11 @@ export function GameScreen({
   );
   const [gameWon, setGameWon] = useState(false);
   const [wonScore, setWonScore] = useState(0);
+  const [isBossPhase, setIsBossPhase] = useState(false);
+  // Slow spin: once per level for 4 seconds
+  const [slowSpinUsed, setSlowSpinUsed] = useState(false);
+  const [slowSpinActive, setSlowSpinActive] = useState(false);
+  const slowSpinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sounds = useSoundManager(muted);
   const soundsRef = useRef(sounds);
@@ -111,7 +116,13 @@ export function GameScreen({
     startGame({
       onScoreChange: setScore,
       onLivesChange: setLives,
-      onLevelChange: setLevel,
+      onLevelChange: (lvl) => {
+        setLevel(lvl);
+        // Reset slow-spin for the new level
+        setSlowSpinUsed(false);
+        setSlowSpinActive(false);
+        if (slowSpinTimerRef.current) clearTimeout(slowSpinTimerRef.current);
+      },
       onGameOver: (finalSc) => {
         soundsRef.current.playGameOver();
         setFinalScore(finalSc);
@@ -143,6 +154,9 @@ export function GameScreen({
         setWonScore(finalSc);
         setGameWon(true);
       },
+      onBossPhaseChange: (active) => {
+        setIsBossPhase(active);
+      },
     });
 
     // Keyboard listeners
@@ -155,6 +169,22 @@ export function GameScreen({
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [startGame, stopGame, handleKeyDown, handleKeyUp]);
+
+  const handleSlowSpin = useCallback(() => {
+    if (slowSpinUsed || isBossPhase) return;
+    setSlowSpinUsed(true);
+    setSlowSpinActive(true);
+    slowSpinTimerRef.current = setTimeout(() => {
+      setSlowSpinActive(false);
+    }, 5000);
+  }, [slowSpinUsed, isBossPhase]);
+
+  // Derive animation style for the maze wrapper
+  const mazeAnimation = isBossPhase
+    ? "none"
+    : slowSpinActive
+      ? "mazeSpin 100s linear infinite"
+      : "mazeSpin 25s linear infinite";
 
   return (
     <>
@@ -204,7 +234,7 @@ export function GameScreen({
             style={{
               position: "relative",
               lineHeight: 0,
-              animation: "mazeSpin 25s linear infinite",
+              animation: mazeAnimation,
             }}
           >
             <canvas
@@ -396,6 +426,56 @@ export function GameScreen({
               onDirection={handleMobileDirection}
               onRelease={handleMobileRelease}
             />
+          </div>
+
+          {/* Slow spin button */}
+          <div
+            style={{
+              background: "rgba(0,0,0,0.5)",
+              borderTop: "1px solid #2a2a2a",
+              padding: "5px 12px",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              type="button"
+              data-ocid="game.slow_spin.button"
+              onClick={handleSlowSpin}
+              disabled={slowSpinUsed || isBossPhase}
+              style={{
+                fontFamily: "'Outfit', sans-serif",
+                fontWeight: 700,
+                fontSize: "0.62rem",
+                letterSpacing: "0.07em",
+                padding: "4px 14px",
+                borderRadius: "6px",
+                border: "1px solid",
+                cursor: slowSpinUsed || isBossPhase ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+                background: slowSpinActive
+                  ? "rgba(100,200,255,0.18)"
+                  : slowSpinUsed
+                    ? "rgba(60,60,60,0.4)"
+                    : "rgba(240,192,48,0.12)",
+                borderColor: slowSpinActive
+                  ? "rgba(100,200,255,0.6)"
+                  : slowSpinUsed
+                    ? "rgba(80,80,80,0.5)"
+                    : "rgba(240,192,48,0.45)",
+                color: slowSpinActive
+                  ? "#a0e8ff"
+                  : slowSpinUsed
+                    ? "#555"
+                    : "#f0c030",
+              }}
+            >
+              {slowSpinActive
+                ? "🌀 SLOWING..."
+                : slowSpinUsed
+                  ? "🌀 USED"
+                  : "🌀 SLOW SPIN (once)"}
+            </button>
           </div>
 
           {/* Control hints bar */}

@@ -44,6 +44,7 @@ export interface RenderState {
   totalPowerUpDuration: number;
   explosionFlash?: boolean;
   bossPhase?: boolean;
+  bossLevel?: number;
   bossTimeLeft?: number;
   bossTotalTime?: number;
   ghostModeActive?: boolean;
@@ -696,7 +697,7 @@ function drawPlayer(
   ctx.restore();
 }
 
-// Draw a giant boss skeleton (centred at tile BOSS_COL, BOSS_ROW), ~2.5x tile size
+// ─── Boss Level 1: Giant Skeleton ────────────────────────────────────────────
 function drawBossSkeleton(
   ctx: CanvasRenderingContext2D,
   frameTime: number,
@@ -704,13 +705,12 @@ function drawBossSkeleton(
   const cx = BOSS_COL * TILE_SIZE + TILE_SIZE / 2;
   const cy = BOSS_ROW * TILE_SIZE + TILE_SIZE / 2;
   const scale = 2.6;
-  const s = TILE_SIZE * scale; // ~72px
+  const s = TILE_SIZE * scale;
 
-  // Pulse scale
   const pulse = 1 + 0.06 * Math.sin(frameTime * 0.004);
   const ps = s * pulse;
 
-  // Red aura glow
+  // Red aura
   const auraR = ps * 1.1;
   const aura = ctx.createRadialGradient(cx, cy, auraR * 0.1, cx, cy, auraR);
   aura.addColorStop(0, "rgba(220,30,30,0.45)");
@@ -726,109 +726,341 @@ function drawBossSkeleton(
   ctx.scale(pulse, pulse);
 
   const hw = ps / 2 / pulse;
+  const u = ps / 16 / pulse;
 
-  // --- Shadow beneath
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.beginPath();
-  ctx.ellipse(0, hw * 0.9, hw * 0.55, hw * 0.12, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // --- Pixel-art skeleton (scaled)
-  // Bone white palette
-  const W = "#e8e0d0"; // white bone
-  const G = "#9a9080"; // grey shading
-  const D = "#3a3030"; // dark outline
-  const R = "#cc2020"; // glowing red eyes
-
-  // Unit for drawing (scaled from unit pixels)
-  const u = ps / 16 / pulse; // 1 "logical pixel" width
+  const W = "#e8e0d0";
+  const G = "#9a9080";
+  const D = "#3a3030";
+  const R = "#cc2020";
 
   function fillPx(lx: number, ly: number, w: number, h: number, color: string) {
     ctx.fillStyle = color;
     ctx.fillRect(-hw + lx * u, -hw + ly * u, w * u, h * u);
   }
 
-  // Body (torso) — rows 6..11, cols 4..11
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(0, hw * 0.9, hw * 0.55, hw * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Torso
   fillPx(4, 6, 8, 6, W);
-  fillPx(5, 7, 6, 4, G); // rib shading
-  // Ribs
+  fillPx(5, 7, 6, 4, G);
   for (let rib = 0; rib < 3; rib++) {
     fillPx(4, 7 + rib * 1.5, 2, 1, D);
     fillPx(10, 7 + rib * 1.5, 2, 1, D);
   }
-
-  // Pelvis
   fillPx(4, 11, 8, 2, W);
   fillPx(5, 11, 6, 1, G);
 
-  // Skull — rows 0..5, cols 4..11
+  // Skull
   fillPx(3, 0, 10, 6, W);
-  fillPx(4, 1, 8, 4, G); // shadow
-  // Eye sockets
+  fillPx(4, 1, 8, 4, G);
   fillPx(4, 2, 3, 3, D);
   fillPx(9, 2, 3, 3, D);
-  // Glowing red pupils
   fillPx(5, 3, 1, 1, R);
   fillPx(10, 3, 1, 1, R);
-  // Teeth / jaw
   fillPx(5, 5, 2, 1, W);
   fillPx(8, 5, 2, 1, W);
   fillPx(6, 5, 1, 1, D);
   fillPx(9, 5, 1, 1, D);
-
-  // Neck
   fillPx(7, 5, 2, 2, W);
 
-  // Left arm — cols 1..4, rows 6..13
+  // Arms
   fillPx(1, 6, 3, 8, W);
   fillPx(1, 6, 1, 8, G);
-  // Left hand
   fillPx(0, 13, 4, 2, W);
-
-  // Right arm — cols 12..15, rows 6..13
   fillPx(12, 6, 3, 8, W);
   fillPx(14, 6, 1, 8, G);
-  // Right hand
   fillPx(12, 13, 4, 2, W);
 
-  // Left leg — cols 4..7, rows 13..16
+  // Legs
   fillPx(4, 13, 3, 4, W);
   fillPx(4, 13, 1, 4, G);
-  // Left foot
   fillPx(3, 16, 4, 2, W);
-
-  // Right leg — cols 9..12, rows 13..16
   fillPx(9, 13, 3, 4, W);
   fillPx(11, 13, 1, 4, G);
-  // Right foot
   fillPx(9, 16, 4, 2, W);
 
-  // Red eye glow particles
-  const eyeGlow = ctx.createRadialGradient(
-    -hw + 5.5 * u,
-    -hw + 3 * u,
-    0,
-    -hw + 5.5 * u,
-    -hw + 3 * u,
-    u * 3,
-  );
-  eyeGlow.addColorStop(0, "rgba(255,60,60,0.7)");
-  eyeGlow.addColorStop(1, "rgba(255,60,60,0)");
-  ctx.fillStyle = eyeGlow;
-  ctx.fillRect(-hw + 3 * u, -hw, u * 6, u * 6);
+  // Eye glows
+  for (const ex of [5.5, 10.5]) {
+    const eg = ctx.createRadialGradient(
+      -hw + ex * u,
+      -hw + 3 * u,
+      0,
+      -hw + ex * u,
+      -hw + 3 * u,
+      u * 3,
+    );
+    eg.addColorStop(0, "rgba(255,60,60,0.7)");
+    eg.addColorStop(1, "rgba(255,60,60,0)");
+    ctx.fillStyle = eg;
+    ctx.fillRect(-hw + (ex - 2.5) * u, -hw, u * 6, u * 6);
+  }
 
-  const eyeGlow2 = ctx.createRadialGradient(
-    -hw + 10.5 * u,
-    -hw + 3 * u,
-    0,
-    -hw + 10.5 * u,
-    -hw + 3 * u,
-    u * 3,
+  ctx.restore();
+}
+
+// ─── Boss Level 3: Giant Zombie ───────────────────────────────────────────────
+function drawBossZombie(
+  ctx: CanvasRenderingContext2D,
+  frameTime: number,
+): void {
+  const cx = BOSS_COL * TILE_SIZE + TILE_SIZE / 2;
+  const cy = BOSS_ROW * TILE_SIZE + TILE_SIZE / 2;
+  const scale = 2.7;
+  const s = TILE_SIZE * scale;
+
+  // Shamble offset — arms lurch forward slightly
+  const shamble = Math.sin(frameTime * 0.0025) * 4;
+  const pulse = 1 + 0.05 * Math.sin(frameTime * 0.003);
+  const ps = s * pulse;
+
+  // Green rotting aura
+  const auraR = ps * 1.15;
+  const aura = ctx.createRadialGradient(cx, cy, auraR * 0.1, cx, cy, auraR);
+  aura.addColorStop(0, "rgba(40,160,30,0.50)");
+  aura.addColorStop(0.5, "rgba(20,100,10,0.25)");
+  aura.addColorStop(1, "rgba(20,100,10,0)");
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(cx, cy, auraR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);
+
+  const hw = ps / 2 / pulse;
+  const u = ps / 16 / pulse;
+
+  const Z = "#4a7a30"; // zombie green skin
+  const ZD = "#2a4a18"; // dark zombie green
+  const ZL = "#78b855"; // light highlight
+  const ZS = "#8B0000"; // dark blood rot spot
+  const YE = "#d4c010"; // yellow zombie eyes
+  const BD = "#1a1a1a"; // dark outline
+
+  function fillPx(lx: number, ly: number, w: number, h: number, color: string) {
+    ctx.fillStyle = color;
+    ctx.fillRect(-hw + lx * u, -hw + ly * u, w * u, h * u);
+  }
+
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.beginPath();
+  ctx.ellipse(0, hw * 0.92, hw * 0.56, hw * 0.13, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Torso — chunky, hunched
+  fillPx(4, 7, 8, 6, Z);
+  fillPx(5, 8, 6, 4, ZD);
+  fillPx(5, 7, 2, 2, ZS); // rot patches
+  fillPx(9, 9, 2, 2, ZS);
+  fillPx(4, 12, 8, 2, ZD); // pelvis / belt
+
+  // Head — square zombie face
+  fillPx(3, 1, 10, 6, Z);
+  fillPx(4, 2, 8, 4, ZD);
+  fillPx(4, 3, 2, 2, BD); // eye sockets
+  fillPx(9, 3, 2, 2, BD);
+  fillPx(4, 3, 1, 1, YE); // yellow eyes
+  fillPx(9, 3, 1, 1, YE);
+  fillPx(3, 1, 2, 1, ZS); // rot on forehead
+  // Mouth — open, ragged
+  fillPx(5, 5, 1, 1, BD);
+  fillPx(7, 5, 2, 1, BD);
+  fillPx(10, 5, 1, 1, BD);
+  // Neck
+  fillPx(7, 6, 2, 2, Z);
+
+  // Arms — outstretched (shambling pose), shifted by shamble
+  const armShift = shamble * 0.15;
+  ctx.fillStyle = Z;
+  ctx.fillRect(-hw + 0 * u, -hw + (6 + armShift) * u, 4 * u, 7 * u); // left arm
+  ctx.fillStyle = ZD;
+  ctx.fillRect(-hw + 0 * u, -hw + (6 + armShift) * u, u, 7 * u);
+  ctx.fillStyle = ZL;
+  ctx.fillRect(-hw + 0 * u, -hw + (12 + armShift) * u, 5 * u, 2 * u); // left hand
+
+  ctx.fillStyle = Z;
+  ctx.fillRect(-hw + 12 * u, -hw + (6 - armShift) * u, 4 * u, 7 * u); // right arm
+  ctx.fillStyle = ZD;
+  ctx.fillRect(-hw + 15 * u, -hw + (6 - armShift) * u, u, 7 * u);
+  ctx.fillStyle = ZL;
+  ctx.fillRect(-hw + 11 * u, -hw + (12 - armShift) * u, 5 * u, 2 * u); // right hand
+
+  // Legs
+  fillPx(4, 13, 3, 5, Z);
+  fillPx(4, 13, 1, 5, ZD);
+  fillPx(3, 17, 4, 1, ZD);
+  fillPx(9, 13, 3, 5, Z);
+  fillPx(11, 13, 1, 5, ZD);
+  fillPx(9, 17, 4, 1, ZD);
+
+  // Yellow eye glow
+  for (const ex of [4.5, 9.5]) {
+    const eg = ctx.createRadialGradient(
+      -hw + ex * u,
+      -hw + 3.5 * u,
+      0,
+      -hw + ex * u,
+      -hw + 3.5 * u,
+      u * 2.5,
+    );
+    eg.addColorStop(0, "rgba(220,200,0,0.75)");
+    eg.addColorStop(1, "rgba(220,200,0,0)");
+    ctx.fillStyle = eg;
+    ctx.fillRect(-hw + (ex - 2) * u, -hw + u, u * 5, u * 5);
+  }
+
+  ctx.restore();
+}
+
+// ─── Boss Level 5: The Wither ─────────────────────────────────────────────────
+function drawBossWither(
+  ctx: CanvasRenderingContext2D,
+  frameTime: number,
+): void {
+  const cx = BOSS_COL * TILE_SIZE + TILE_SIZE / 2;
+  const cy = BOSS_ROW * TILE_SIZE + TILE_SIZE / 2;
+  const scale = 3.0;
+  const s = TILE_SIZE * scale;
+
+  const pulse = 1 + 0.08 * Math.sin(frameTime * 0.005);
+  const ps = s * pulse;
+  const float = Math.sin(frameTime * 0.0025) * 3; // floating bob
+
+  // Dark purple/black aura — ominous
+  const auraR = ps * 1.3;
+  const aura = ctx.createRadialGradient(
+    cx,
+    cy + float,
+    auraR * 0.05,
+    cx,
+    cy + float,
+    auraR,
   );
-  eyeGlow2.addColorStop(0, "rgba(255,60,60,0.7)");
-  eyeGlow2.addColorStop(1, "rgba(255,60,60,0)");
-  ctx.fillStyle = eyeGlow2;
-  ctx.fillRect(-hw + 8 * u, -hw, u * 6, u * 6);
+  aura.addColorStop(0, "rgba(120,0,200,0.55)");
+  aura.addColorStop(0.4, "rgba(60,0,120,0.30)");
+  aura.addColorStop(1, "rgba(20,0,60,0)");
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(cx, cy + float, auraR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Dark energy particles orbiting
+  const numParticles = 8;
+  for (let i = 0; i < numParticles; i++) {
+    const angle = (i / numParticles) * Math.PI * 2 + frameTime * 0.002;
+    const orbitR = ps * 0.65;
+    const px2 = cx + Math.cos(angle) * orbitR;
+    const py2 = cy + float + Math.sin(angle) * orbitR * 0.4;
+    const particleAlpha = 0.5 + 0.4 * Math.sin(angle + frameTime * 0.003);
+    ctx.fillStyle = `rgba(180,60,255,${particleAlpha})`;
+    ctx.beginPath();
+    ctx.arc(px2, py2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(cx, cy + float);
+  ctx.scale(pulse, pulse);
+
+  const hw = ps / 2 / pulse;
+  const u = ps / 16 / pulse;
+
+  const BK = "#1a1218"; // near black body
+  const DG = "#2a1f30"; // dark grey shading
+  const PU = "#6020a0"; // purple accent
+  const WH = "#d8d0c8"; // skull bone
+  const GR = "#8a8078"; // skull shadow
+  const CY = "#00e8ff"; // cyan wither eyes
+  const SK = "#3a3038"; // spine connector
+
+  function fillPx(lx: number, ly: number, w: number, h: number, color: string) {
+    ctx.fillStyle = color;
+    ctx.fillRect(-hw + lx * u, -hw + ly * u, w * u, h * u);
+  }
+
+  // Central spine / body — narrow dark pillar
+  fillPx(6, 6, 4, 10, BK);
+  fillPx(7, 6, 2, 10, DG);
+  // Spine connector segments
+  for (let seg = 0; seg < 4; seg++) {
+    fillPx(6, 7 + seg * 2, 4, 1, SK);
+    fillPx(6, 7 + seg * 2, 4, 1, PU);
+  }
+
+  // Shoulder bar
+  fillPx(2, 6, 12, 2, BK);
+  fillPx(3, 6, 10, 1, DG);
+
+  // Three skulls across the top (side skulls slightly lower)
+  // Centre skull — row 0..5, col 5..10
+  fillPx(4, 0, 8, 6, WH);
+  fillPx(5, 1, 6, 4, GR);
+  fillPx(5, 2, 2, 2, BK); // eye l
+  fillPx(9, 2, 2, 2, BK); // eye r
+  fillPx(6, 2, 1, 1, CY); // cyan pupil l
+  fillPx(10, 2, 1, 1, CY); // cyan pupil r
+  // Centre skull jaw
+  fillPx(5, 5, 6, 1, WH);
+  fillPx(6, 5, 1, 1, BK);
+  fillPx(9, 5, 1, 1, BK);
+
+  // Left skull — col 0..4, row 1..5
+  fillPx(0, 2, 5, 4, WH);
+  fillPx(1, 3, 3, 2, GR);
+  fillPx(1, 3, 1, 1, CY);
+  fillPx(3, 3, 1, 1, CY);
+  fillPx(1, 5, 4, 1, WH);
+
+  // Right skull — col 11..15, row 1..5
+  fillPx(11, 2, 5, 4, WH);
+  fillPx(12, 3, 3, 2, GR);
+  fillPx(12, 3, 1, 1, CY);
+  fillPx(14, 3, 1, 1, CY);
+  fillPx(11, 5, 4, 1, WH);
+
+  // Arms — dark bony tendrils
+  fillPx(0, 7, 2, 6, BK);
+  fillPx(0, 7, 1, 6, DG);
+  fillPx(14, 7, 2, 6, BK);
+  fillPx(15, 7, 1, 6, DG);
+  // Claws
+  fillPx(0, 12, 3, 1, BK);
+  fillPx(13, 12, 3, 1, BK);
+
+  // Lower wisps / legs — ghostly trailing
+  fillPx(5, 14, 2, 3, BK);
+  fillPx(9, 14, 2, 3, BK);
+  fillPx(6, 15, 1, 2, DG);
+  fillPx(10, 15, 1, 2, DG);
+
+  // Purple spine glow
+  const spineGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, hw * 0.5);
+  spineGlow.addColorStop(0, "rgba(120,40,220,0.35)");
+  spineGlow.addColorStop(1, "rgba(120,40,220,0)");
+  ctx.fillStyle = spineGlow;
+  ctx.fillRect(-hw * 0.5, -hw * 0.5, hw, hw);
+
+  // Cyan eye glows for centre skull
+  for (const ex of [6.5, 10.5]) {
+    const eg = ctx.createRadialGradient(
+      -hw + ex * u,
+      -hw + 2.5 * u,
+      0,
+      -hw + ex * u,
+      -hw + 2.5 * u,
+      u * 2.5,
+    );
+    eg.addColorStop(0, "rgba(0,240,255,0.8)");
+    eg.addColorStop(1, "rgba(0,240,255,0)");
+    ctx.fillStyle = eg;
+    ctx.fillRect(-hw + (ex - 2) * u, -hw, u * 5, u * 5);
+  }
 
   ctx.restore();
 }
@@ -838,11 +1070,14 @@ function drawBossOverlay(
   bossTimeLeft: number,
   bossTotalTime: number,
   frameTime: number,
+  bossLevel?: number,
 ): void {
   const W = COLS * TILE_SIZE;
   const H = ROWS * TILE_SIZE;
 
-  // Red vignette
+  // Boss-specific vignette colour
+  const vigR =
+    bossLevel === 5 ? "100,0,180" : bossLevel === 3 ? "0,140,20" : "180,0,0";
   const vigPulse = 0.18 + 0.08 * Math.abs(Math.sin(frameTime * 0.005));
   const vig = ctx.createRadialGradient(
     W / 2,
@@ -852,23 +1087,31 @@ function drawBossOverlay(
     H / 2,
     H * 0.85,
   );
-  vig.addColorStop(0, "rgba(180,0,0,0)");
-  vig.addColorStop(1, `rgba(180,0,0,${vigPulse})`);
+  vig.addColorStop(0, `rgba(${vigR},0)`);
+  vig.addColorStop(1, `rgba(${vigR},${vigPulse})`);
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
-  // "BOSS BATTLE!" title
+  // Boss name
+  const bossName =
+    bossLevel === 5
+      ? "💀 THE WITHER 💀"
+      : bossLevel === 3
+        ? "🧟 GIANT ZOMBIE 🧟"
+        : "☠ BOSS BATTLE! ☠";
+  const titleColor =
+    bossLevel === 5 ? "#cc66ff" : bossLevel === 3 ? "#44ff88" : "#ff4444";
+  const titleColorDim =
+    bossLevel === 5 ? "#aa44dd" : bossLevel === 3 ? "#22cc55" : "#ff8888";
   const titleFlash = Math.sin(frameTime * 0.008) > 0;
   ctx.save();
   ctx.font = `bold ${TILE_SIZE * 1.05}px 'Outfit', sans-serif`;
   ctx.textAlign = "center";
   ctx.letterSpacing = "2px";
-  // Shadow
   ctx.fillStyle = "rgba(0,0,0,0.8)";
-  ctx.fillText("☠ BOSS BATTLE! ☠", W / 2 + 2, TILE_SIZE * 1.6 + 2);
-  // Text
-  ctx.fillStyle = titleFlash ? "#ff4444" : "#ff8888";
-  ctx.fillText("☠ BOSS BATTLE! ☠", W / 2, TILE_SIZE * 1.6);
+  ctx.fillText(bossName, W / 2 + 2, TILE_SIZE * 1.6 + 2);
+  ctx.fillStyle = titleFlash ? titleColor : titleColorDim;
+  ctx.fillText(bossName, W / 2, TILE_SIZE * 1.6);
   ctx.restore();
 
   // Countdown bar background
@@ -925,6 +1168,7 @@ export function renderFrame(
     totalPowerUpDuration,
     explosionFlash,
     bossPhase,
+    bossLevel,
     bossTimeLeft,
     bossTotalTime,
     ghostModeActive,
@@ -1144,9 +1388,15 @@ export function renderFrame(
     );
   }
 
-  // Draw boss skeleton (before player so player renders on top)
+  // Draw boss (before player so player renders on top)
   if (bossPhase) {
-    drawBossSkeleton(ctx, frameTime);
+    if (bossLevel === 5) {
+      drawBossWither(ctx, frameTime);
+    } else if (bossLevel === 3) {
+      drawBossZombie(ctx, frameTime);
+    } else {
+      drawBossSkeleton(ctx, frameTime);
+    }
   }
 
   // Draw player (with ghost overlay if active)
@@ -1210,6 +1460,6 @@ export function renderFrame(
 
   // Boss overlay HUD (on top of everything)
   if (bossPhase && bossTimeLeft !== undefined && bossTotalTime !== undefined) {
-    drawBossOverlay(ctx, bossTimeLeft, bossTotalTime, frameTime);
+    drawBossOverlay(ctx, bossTimeLeft, bossTotalTime, frameTime, bossLevel);
   }
 }

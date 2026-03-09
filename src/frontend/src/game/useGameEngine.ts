@@ -111,6 +111,7 @@ export interface GameCallbacks {
   onBossDefeated?: () => void;
   onBossKilled?: () => void;
   onGameWon?: (score: number) => void;
+  onBossPhaseChange?: (active: boolean) => void;
 }
 
 function cloneMaze(maze: number[][]): number[][] {
@@ -489,6 +490,7 @@ export function useGameEngine(
           state.bossPhase = true;
           state.bossStartTime = now;
           state.bossDefeated = false;
+          callbacksRef.current?.onBossPhaseChange?.(true);
           // Hide normal enemies during boss phase
           for (const e of state.enemies) {
             e.dead = true;
@@ -561,6 +563,7 @@ export function useGameEngine(
           Math.abs(state.player.row - BOSS_ROW);
         if (dist <= BOSS_KILL_DISTANCE) {
           // Boss kills player — notify UI first, then restart
+          callbacksRef.current?.onBossPhaseChange?.(false);
           callbacksRef.current?.onLifeLost?.();
           callbacksRef.current?.onBossKilled?.();
           // Full restart after a short delay to let the overlay show
@@ -580,6 +583,7 @@ export function useGameEngine(
           state.bossPhase = false;
           state.score += state.level * 500;
           callbacksRef.current?.onScoreChange(state.score);
+          callbacksRef.current?.onBossPhaseChange?.(false);
           callbacksRef.current?.onBossDefeated?.();
           if (state.level >= MAX_LEVELS) {
             // Last level boss defeated — win the game
@@ -606,6 +610,7 @@ export function useGameEngine(
               totalPowerUpDuration: POWER_UP_DURATION,
               explosionFlash: false,
               bossPhase: true,
+              bossLevel: state.level,
               bossTimeLeft,
               bossTotalTime: BOSS_DURATION,
               ghostModeActive: state.ghostModeActive,
