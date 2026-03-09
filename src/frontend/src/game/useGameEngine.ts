@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import {
+  BOSS_COL,
+  BOSS_DURATION,
+  BOSS_KILL_DISTANCE,
+  BOSS_ROW,
   COLS,
   type Direction,
   ENEMY_STARTS,
@@ -60,6 +64,10 @@ export interface GameState {
   collectedCount: number;
   // Explosion flash effect (timestamp when triggered)
   explosionFlashUntil: number;
+  // Boss battle phase
+  bossPhase: boolean;
+  bossStartTime: number;
+  bossDefeated: boolean;
 }
 
 export interface GameCallbacks {
@@ -155,6 +163,9 @@ export function useGameEngine(
       totalCollectibles: total,
       collectedCount: 0,
       explosionFlashUntil: 0,
+      bossPhase: false,
+      bossStartTime: 0,
+      bossDefeated: false,
     };
   }, []);
 
@@ -393,27 +404,37 @@ export function useGameEngine(
     [resetPositions],
   );
 
-  const checkLevelComplete = useCallback((state: GameState): void => {
-    let remaining = 0;
-    for (const row of state.maze) {
-      for (const cell of row) {
-        if (
-          cell === TILE.STEAK ||
-          cell === TILE.PORK_CHOP ||
-          cell === TILE.GOLDEN_APPLE
-        ) {
-          remaining++;
+  const checkLevelComplete = useCallback(
+    (state: GameState, now: number): void => {
+      // Already in boss or level complete — skip
+      if (state.bossPhase || state.levelComplete) return;
+
+      let remaining = 0;
+      for (const row of state.maze) {
+        for (const cell of row) {
+          if (
+            cell === TILE.STEAK ||
+            cell === TILE.PORK_CHOP ||
+            cell === TILE.GOLDEN_APPLE
+          ) {
+            remaining++;
+          }
         }
       }
-    }
-    if (remaining === 0) {
-      // Level complete bonus
-      state.score += state.level * 500;
-      callbacksRef.current?.onScoreChange(state.score);
-      callbacksRef.current?.onLevelComplete?.();
-      state.levelComplete = true;
-    }
-  }, []);
+      if (remaining === 0) {
+        // Trigger boss phase instead of immediate level complete
+        state.bossPhase = true;
+        state.bossStartTime = now;
+        state.bossDefeated = false;
+        // Hide normal enemies during boss phase
+        for (const e of state.enemies) {
+          e.dead = true;
+          e.respawnTimer = 999999;
+        }
+      }
+    },
+    [],
+  );
 
   const gameLoop = useCallback(
     (timestamp: number): void => {
@@ -443,39 +464,99 @@ export function useGameEngine(
         newState.lives = savedLives;
         stateRef.current = newState;
         callbacksRef.current?.onLevelChange(newLevel);
+      } else if (state.bossPhase) {
+        // Boss phase: player must survive BOSS_DURATION ms
+        const elapsed = now - state.bossStartTime;
+        const bossTimeLeft = Math.max(0, BOSS_DURATION - elapsed);
+
+        // Still allow player movement
+        movePlayer(state, now);
+
+        // Check if player gets too close to the boss
+        const dist =
+          Math.abs(state.player.col - BOSS_COL) +
+          Math.abs(state.player.row - BOSS_ROW);
+        if (dist <= BOSS_KILL_DISTANCE) {
+          // Boss kills player — restart from level 1, reset lives and score
+          callbacksRef.current?.onLifeLost?.();
+          // Full restart
+          levelRef.current = 1;
+          const restartState = initState(1);
+          restartState.score = 0;
+          restartState.lives = 3;
+          stateRef.current = restartState;
+          callbacksRef.current?.onScoreChange(0);
+          callbacksRef.current?.onLivesChange(3);
+          callbacksRef.current?.onLevelChange(1);
+        } else if (bossTimeLeft <= 0) {
+          // Survived! Level complete
+          state.bossDefeated = true;
+          state.bossPhase = false;
+          state.score += state.level * 500;
+          callbacksRef.current?.onScoreChange(state.score);
+          callbacksRef.current?.onLevelComplete?.();
+          state.levelComplete = true;
+        }
+
+        // Render with boss
+        const ctx = canvasRef.current.getContext("2d");
+        if (ctx) {
+          renderFrame(
+            ctx,
+            {
+              maze: state.maze,
+              player: state.player,
+              playerDirection: state.currentDirection,
+              enemies: [],
+              powerUpActive: false,
+              powerUpTimeLeft: 0,
+              totalPowerUpDuration: POWER_UP_DURATION,
+              explosionFlash: false,
+              bossPhase: true,
+              bossTimeLeft,
+              bossTotalTime: BOSS_DURATION,
+            },
+            now - startTimeRef.current,
+          );
+        }
       } else {
         movePlayer(state, now);
         moveEnemies(state, now);
         checkCollisions(state);
-        checkLevelComplete(state);
+        checkLevelComplete(state, now);
       }
 
-      // Render
-      const ctx = canvasRef.current.getContext("2d");
-      if (ctx) {
-        const renderEnemies: RenderEnemy[] = state.enemies.map((e) => ({
-          col: e.col,
-          row: e.row,
-          type: e.type,
-          scared: e.scared,
-          visible: !e.dead,
-        }));
-        renderFrame(
-          ctx,
-          {
-            maze: state.maze,
-            player: state.player,
-            playerDirection: state.currentDirection,
-            enemies: renderEnemies,
-            powerUpActive: state.powerUpActive,
-            powerUpTimeLeft: state.powerUpActive
-              ? Math.max(0, state.powerUpEndTime - now)
-              : 0,
-            totalPowerUpDuration: POWER_UP_DURATION,
-            explosionFlash: now < state.explosionFlashUntil,
-          },
-          now - startTimeRef.current,
-        );
+      // Render (normal phase — skipped if already rendered above)
+      if (!state.bossPhase && !state.levelComplete) {
+        const ctx = canvasRef.current.getContext("2d");
+        if (ctx) {
+          const renderEnemies: RenderEnemy[] = state.enemies.map((e) => ({
+            col: e.col,
+            row: e.row,
+            type: e.type,
+            scared: e.scared,
+            visible: !e.dead,
+          }));
+          renderFrame(
+            ctx,
+            {
+              maze: state.maze,
+              player: state.player,
+              playerDirection: state.currentDirection,
+              enemies: renderEnemies,
+              powerUpActive: state.powerUpActive,
+              powerUpTimeLeft: state.powerUpActive
+                ? Math.max(0, state.powerUpEndTime - now)
+                : 0,
+              totalPowerUpDuration: POWER_UP_DURATION,
+              explosionFlash: now < state.explosionFlashUntil,
+              bossPhase: false,
+              bossTimeLeft: 0,
+              bossTotalTime: BOSS_DURATION,
+            },
+            now - startTimeRef.current,
+          );
+        }
       }
 
       if (!state.gameOver) {

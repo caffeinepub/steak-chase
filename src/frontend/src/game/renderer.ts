@@ -1,4 +1,6 @@
 import {
+  BOSS_COL,
+  BOSS_ROW,
   COLS,
   type EnemyType,
   PORTAL_PAIRS,
@@ -41,6 +43,9 @@ export interface RenderState {
   powerUpTimeLeft: number;
   totalPowerUpDuration: number;
   explosionFlash?: boolean;
+  bossPhase?: boolean;
+  bossTimeLeft?: number;
+  bossTotalTime?: number;
 }
 
 // Image cache
@@ -533,6 +538,220 @@ function drawPlayer(
   ctx.restore();
 }
 
+// Draw a giant boss skeleton (centred at tile BOSS_COL, BOSS_ROW), ~2.5x tile size
+function drawBossSkeleton(
+  ctx: CanvasRenderingContext2D,
+  frameTime: number,
+): void {
+  const cx = BOSS_COL * TILE_SIZE + TILE_SIZE / 2;
+  const cy = BOSS_ROW * TILE_SIZE + TILE_SIZE / 2;
+  const scale = 2.6;
+  const s = TILE_SIZE * scale; // ~72px
+
+  // Pulse scale
+  const pulse = 1 + 0.06 * Math.sin(frameTime * 0.004);
+  const ps = s * pulse;
+
+  // Red aura glow
+  const auraR = ps * 1.1;
+  const aura = ctx.createRadialGradient(cx, cy, auraR * 0.1, cx, cy, auraR);
+  aura.addColorStop(0, "rgba(220,30,30,0.45)");
+  aura.addColorStop(0.5, "rgba(180,0,0,0.2)");
+  aura.addColorStop(1, "rgba(180,0,0,0)");
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(cx, cy, auraR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);
+
+  const hw = ps / 2 / pulse;
+
+  // --- Shadow beneath
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(0, hw * 0.9, hw * 0.55, hw * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // --- Pixel-art skeleton (scaled)
+  // Bone white palette
+  const W = "#e8e0d0"; // white bone
+  const G = "#9a9080"; // grey shading
+  const D = "#3a3030"; // dark outline
+  const R = "#cc2020"; // glowing red eyes
+
+  // Unit for drawing (scaled from unit pixels)
+  const u = ps / 16 / pulse; // 1 "logical pixel" width
+
+  function fillPx(lx: number, ly: number, w: number, h: number, color: string) {
+    ctx.fillStyle = color;
+    ctx.fillRect(-hw + lx * u, -hw + ly * u, w * u, h * u);
+  }
+
+  // Body (torso) — rows 6..11, cols 4..11
+  fillPx(4, 6, 8, 6, W);
+  fillPx(5, 7, 6, 4, G); // rib shading
+  // Ribs
+  for (let rib = 0; rib < 3; rib++) {
+    fillPx(4, 7 + rib * 1.5, 2, 1, D);
+    fillPx(10, 7 + rib * 1.5, 2, 1, D);
+  }
+
+  // Pelvis
+  fillPx(4, 11, 8, 2, W);
+  fillPx(5, 11, 6, 1, G);
+
+  // Skull — rows 0..5, cols 4..11
+  fillPx(3, 0, 10, 6, W);
+  fillPx(4, 1, 8, 4, G); // shadow
+  // Eye sockets
+  fillPx(4, 2, 3, 3, D);
+  fillPx(9, 2, 3, 3, D);
+  // Glowing red pupils
+  fillPx(5, 3, 1, 1, R);
+  fillPx(10, 3, 1, 1, R);
+  // Teeth / jaw
+  fillPx(5, 5, 2, 1, W);
+  fillPx(8, 5, 2, 1, W);
+  fillPx(6, 5, 1, 1, D);
+  fillPx(9, 5, 1, 1, D);
+
+  // Neck
+  fillPx(7, 5, 2, 2, W);
+
+  // Left arm — cols 1..4, rows 6..13
+  fillPx(1, 6, 3, 8, W);
+  fillPx(1, 6, 1, 8, G);
+  // Left hand
+  fillPx(0, 13, 4, 2, W);
+
+  // Right arm — cols 12..15, rows 6..13
+  fillPx(12, 6, 3, 8, W);
+  fillPx(14, 6, 1, 8, G);
+  // Right hand
+  fillPx(12, 13, 4, 2, W);
+
+  // Left leg — cols 4..7, rows 13..16
+  fillPx(4, 13, 3, 4, W);
+  fillPx(4, 13, 1, 4, G);
+  // Left foot
+  fillPx(3, 16, 4, 2, W);
+
+  // Right leg — cols 9..12, rows 13..16
+  fillPx(9, 13, 3, 4, W);
+  fillPx(11, 13, 1, 4, G);
+  // Right foot
+  fillPx(9, 16, 4, 2, W);
+
+  // Red eye glow particles
+  const eyeGlow = ctx.createRadialGradient(
+    -hw + 5.5 * u,
+    -hw + 3 * u,
+    0,
+    -hw + 5.5 * u,
+    -hw + 3 * u,
+    u * 3,
+  );
+  eyeGlow.addColorStop(0, "rgba(255,60,60,0.7)");
+  eyeGlow.addColorStop(1, "rgba(255,60,60,0)");
+  ctx.fillStyle = eyeGlow;
+  ctx.fillRect(-hw + 3 * u, -hw, u * 6, u * 6);
+
+  const eyeGlow2 = ctx.createRadialGradient(
+    -hw + 10.5 * u,
+    -hw + 3 * u,
+    0,
+    -hw + 10.5 * u,
+    -hw + 3 * u,
+    u * 3,
+  );
+  eyeGlow2.addColorStop(0, "rgba(255,60,60,0.7)");
+  eyeGlow2.addColorStop(1, "rgba(255,60,60,0)");
+  ctx.fillStyle = eyeGlow2;
+  ctx.fillRect(-hw + 8 * u, -hw, u * 6, u * 6);
+
+  ctx.restore();
+}
+
+function drawBossOverlay(
+  ctx: CanvasRenderingContext2D,
+  bossTimeLeft: number,
+  bossTotalTime: number,
+  frameTime: number,
+): void {
+  const W = COLS * TILE_SIZE;
+  const H = ROWS * TILE_SIZE;
+
+  // Red vignette
+  const vigPulse = 0.18 + 0.08 * Math.abs(Math.sin(frameTime * 0.005));
+  const vig = ctx.createRadialGradient(
+    W / 2,
+    H / 2,
+    H * 0.25,
+    W / 2,
+    H / 2,
+    H * 0.85,
+  );
+  vig.addColorStop(0, "rgba(180,0,0,0)");
+  vig.addColorStop(1, `rgba(180,0,0,${vigPulse})`);
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  // "BOSS BATTLE!" title
+  const titleFlash = Math.sin(frameTime * 0.008) > 0;
+  ctx.save();
+  ctx.font = `bold ${TILE_SIZE * 1.05}px 'Outfit', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.letterSpacing = "2px";
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.8)";
+  ctx.fillText("☠ BOSS BATTLE! ☠", W / 2 + 2, TILE_SIZE * 1.6 + 2);
+  // Text
+  ctx.fillStyle = titleFlash ? "#ff4444" : "#ff8888";
+  ctx.fillText("☠ BOSS BATTLE! ☠", W / 2, TILE_SIZE * 1.6);
+  ctx.restore();
+
+  // Countdown bar background
+  const barH = 10;
+  const barY = TILE_SIZE * 2.2;
+  const barPad = TILE_SIZE * 1.5;
+  const barW = W - barPad * 2;
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.beginPath();
+  ctx.roundRect(barPad, barY, barW, barH, 5);
+  ctx.fill();
+
+  // Countdown bar fill
+  const fraction = bossTimeLeft / bossTotalTime;
+  const barColor =
+    fraction > 0.5 ? "#ff4444" : fraction > 0.25 ? "#ff8800" : "#ffcc00";
+  const grad = ctx.createLinearGradient(barPad, 0, barPad + barW, 0);
+  grad.addColorStop(0, barColor);
+  grad.addColorStop(1, "#ff0000");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(barPad, barY, barW * fraction, barH, 5);
+  ctx.fill();
+
+  // Timer text
+  const secs = Math.ceil(bossTimeLeft / 1000);
+  ctx.save();
+  ctx.font = `bold ${TILE_SIZE * 0.75}px 'Outfit', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillText(
+    `Survive ${secs}s!`,
+    W / 2 + 1,
+    barY + barH + TILE_SIZE * 0.85 + 1,
+  );
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(`Survive ${secs}s!`, W / 2, barY + barH + TILE_SIZE * 0.85);
+  ctx.restore();
+}
+
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
   state: RenderState,
@@ -547,6 +766,9 @@ export function renderFrame(
     powerUpTimeLeft,
     totalPowerUpDuration,
     explosionFlash,
+    bossPhase,
+    bossTimeLeft,
+    bossTotalTime,
   } = state;
 
   // Clear — darker, more atmospheric base
@@ -682,6 +904,11 @@ export function renderFrame(
     );
   }
 
+  // Draw boss skeleton (before player so player renders on top)
+  if (bossPhase) {
+    drawBossSkeleton(ctx, frameTime);
+  }
+
   // Draw player
   drawPlayer(
     ctx,
@@ -695,5 +922,10 @@ export function renderFrame(
   if (explosionFlash) {
     ctx.fillStyle = "rgba(255,120,0,0.35)";
     ctx.fillRect(0, 0, COLS * TILE_SIZE, ROWS * TILE_SIZE);
+  }
+
+  // Boss overlay HUD (on top of everything)
+  if (bossPhase && bossTimeLeft !== undefined && bossTotalTime !== undefined) {
+    drawBossOverlay(ctx, bossTimeLeft, bossTotalTime, frameTime);
   }
 }

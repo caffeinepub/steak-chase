@@ -29,6 +29,12 @@ export const SKELETON_SPEED = 180; // ms per tile (base) — fast but straight-l
 export const POWER_UP_ENEMY_SPEED_MULTIPLIER = 2.2;
 export const EXPLOSION_RADIUS = 3; // tiles
 
+// Boss battle
+export const BOSS_DURATION = 5000; // ms player must survive
+export const BOSS_COL = 9; // centre column of the maze
+export const BOSS_ROW = 10; // centre row of the maze
+export const BOSS_KILL_DISTANCE = 2; // Manhattan distance at which boss kills player
+
 // Portal tile positions (paired): [A, B] — stepping on A teleports to B and vice versa
 export const PORTAL_PAIRS: Array<
   [{ col: number; row: number }, { col: number; row: number }]

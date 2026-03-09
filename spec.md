@@ -1,36 +1,35 @@
 # Steak Chase
 
 ## Current State
-- Pac-Man style maze game with wolf player, zombies and skeletons all using BFS chase AI
-- Collectibles: steak, pork chop, golden apple (power-up)
-- Maze has walls, path tiles, and collectible tiles
-- Renderer draws walls, paths, collectibles, wolf pixel-art player, and sprite-based enemies
-- Sound effects, mute button, mobile D-pad + swipe controls, leaderboard on splash screen
+Full Pac-Man style maze game with wolf player, zombie and skeleton enemies, collectibles (steaks, pork chops, golden apples), explosions, portals, leaderboard, and mobile controls. When all collectibles are eaten the level is marked complete and the game immediately transitions to the next level.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Zombie distinct AI**: slow movement speed (already slower), but uses BFS to always follow the player (current behavior — ensure it stays clearly slower than skeleton)
-- **Skeleton distinct AI**: fast movement but can only move in straight lines (no turning, picks a direction and goes until hitting a wall, then picks a new straight direction)
-- **TILE.EXPLOSION (value 5)**: bomb/explosion pickup tile — when player steps on it, all enemies within a 3-tile radius are killed/sent to respawn; awards bonus score
-- **TILE.PORTAL (value 6)**: portal tile pair — two portals placed in the maze; stepping on one teleports the player to the other; animated swirling visual
+- **Boss Battle phase**: Triggered when the last collectible is eaten (before the level actually completes).
+- **Giant Boss Skeleton**: Rendered much larger than normal enemies (~2.5x tile size), centred in the maze, pulsing red glow. Does not follow the player — it just looms in place visually (intimidation effect).
+- **5-second survival timer**: A countdown bar/overlay drawn on the canvas showing time remaining. The player must stay alive (not touch the boss) for 5 seconds.
+- **Boss hitbox**: If the wolf walks into any tile adjacent to or occupied by the boss, the player loses — restart level 1 (lives reset to 3, score resets to 0).
+- **Boss win condition**: Survive 5 seconds → boss explodes (flash effect) → advance to next level (existing level-complete path).
+- **Boss phase state**: New fields in `GameState`: `bossPhase: boolean`, `bossStartTime: number`.
+- **Boss overlay UI**: Semi-transparent red vignette + "BOSS BATTLE!" text + countdown bar rendered directly on the canvas during boss phase.
+- Sound: reuse `playLifeLost` on boss hit, `playLevelComplete` on surviving the boss.
 
 ### Modify
-- `constants.ts`: add TILE.EXPLOSION and TILE.PORTAL values, add SCORE.EXPLOSION, add a few explosion/portal tiles to INITIAL_MAZE, adjust ZOMBIE_SPEED to be clearly slower and SKELETON_SPEED clearly faster
-- `pathfinding.ts`: add `straightLineStep` function for skeleton AI — continues in current direction if open, otherwise picks a new random open straight direction
-- `useGameEngine.ts`: 
-  - Track skeleton's current straight-line direction in GameEnemy
-  - Update `moveEnemies` to use BFS for zombies, straight-line logic for skeletons
-  - Update `movePlayer` to handle TILE.EXPLOSION (clear nearby enemies) and TILE.PORTAL (teleport player to paired portal)
-  - Track portal pair positions so teleportation works
-- `renderer.ts`: add `drawExplosion` and `drawPortal` functions; render new tile types in the main render loop
+- `checkLevelComplete` (useGameEngine.ts): Instead of setting `levelComplete = true` directly, set `bossPhase = true` and record `bossStartTime`.
+- `gameLoop` (useGameEngine.ts): Add boss-phase tick — check if player overlaps boss (within 1 tile Manhattan distance), decrement timer, transition on win/loss.
+- `GameState` interface: Add `bossPhase`, `bossStartTime`, `bossDefeated` fields.
+- `initState`: Initialise new fields to false/0.
+- `renderer.ts` `renderFrame`: Accept optional boss-phase data and render the giant skeleton + countdown overlay.
+- `RenderState` interface: Add `bossPhase`, `bossTimeLeft`, `bossTotalTime` fields.
 
 ### Remove
-- Nothing removed
+- Nothing removed.
 
 ## Implementation Plan
-1. Update `constants.ts`: add tile types, scores, adjust speeds, add explosion/portal tiles to maze
-2. Update `pathfinding.ts`: add `straightLineStep` for skeleton straight-line movement
-3. Update `useGameEngine.ts`: add skeleton direction tracking, explosion logic, portal teleport logic
-4. Update `renderer.ts`: draw explosion bomb tile (💣 pixel art) and portal tile (swirling vortex animation)
-5. Update `GameScreen.tsx` control hints bar to mention new items
+1. Add `bossPhase`, `bossStartTime`, `bossDefeated` to `GameState` in `useGameEngine.ts` and initialise in `initState`.
+2. Modify `checkLevelComplete` to enter boss phase instead of completing the level.
+3. In the game loop, add a boss-phase branch: check player proximity to centre (cols 9, row 10), on death reset to level 1 with lives=3 score=0, on survive 5s set `levelComplete = true`.
+4. Pass boss render data through `RenderState` to `renderFrame`.
+5. In `renderer.ts`, add `drawBossSkeleton` function (giant pixel-art skeleton, red glow, slow pulse).
+6. Render boss countdown bar + red vignette + "BOSS BATTLE!" text overlay in `renderFrame` when `bossPhase` is true.
